@@ -162,3 +162,12 @@ exports.getForwardLinks = function(source) {
 	if(!targets) { return []; }
 	return Object.keys(targets).sort();
 };
+
+/*
+Empty the index. Tests use this between wikis; normal runtime doesn't
+need it (the startup hook calls rebuildAll which is idempotent).
+*/
+exports.reset = function() {
+	forward = Object.create(null);
+	reverse = Object.create(null);
+};

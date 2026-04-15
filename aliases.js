@@ -33,8 +33,10 @@ tiddler set, typically small.
 var EXACT_TAG   = "$:/tags/NamespaceAlias";
 var PATTERN_TAG = "$:/tags/NamespacePatternAlias";
 
-// Cache: {exact: {short → expansion}, patterns: [{regex, replacement, title}]}
-var cache = null;
+// Cache keyed per-wiki (WeakMap) so multiple concurrent wikis — in
+// practice only matters for tests — don't share stale entries.
+// Entry shape: {exact: {short → expansion}, patterns: [{regex, replacement, title}]}
+var caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
 
 function iterateTaggedTitles(wiki, tag, cb) {
 	var titles = wiki.filterTiddlers("[all[tiddlers+shadows]tag[" + tag + "]]");
@@ -42,15 +44,16 @@ function iterateTaggedTitles(wiki, tag, cb) {
 }
 
 function buildCache(wiki) {
-	if(cache) { return; }
-	cache = {exact: Object.create(null), patterns: []};
+	var entry = caches && caches.get(wiki);
+	if(entry) { return entry; }
+	entry = {exact: Object.create(null), patterns: []};
 	iterateTaggedTitles(wiki, EXACT_TAG, function(title) {
 		var t = wiki.getTiddler(title);
 		if(!t || !t.fields) { return; }
 		var short = t.fields["short"],
 			expansion = t.fields["expands-to"];
 		if(typeof short === "string" && short && typeof expansion === "string" && expansion) {
-			cache.exact[short] = expansion;
+			entry.exact[short] = expansion;
 		}
 	});
 	iterateTaggedTitles(wiki, PATTERN_TAG, function(title) {
@@ -61,7 +64,7 @@ function buildCache(wiki) {
 		if(typeof pattern !== "string" || !pattern) { return; }
 		if(typeof replacement !== "string") { return; }
 		try {
-			cache.patterns.push({
+			entry.patterns.push({
 				regex: new RegExp(pattern),
 				replacement: replacement,
 				title: title
@@ -72,6 +75,8 @@ function buildCache(wiki) {
 			}
 		}
 	});
+	if(caches) { caches.set(wiki, entry); }
+	return entry;
 }
 
 /*
@@ -82,7 +87,7 @@ wants to support chained aliases.
 */
 exports.resolveAlias = function(ref, wiki) {
 	if(!ref) { return null; }
-	buildCache(wiki);
+	var cache = buildCache(wiki);
 	if(cache.exact[ref]) { return cache.exact[ref]; }
 	for(var i = 0; i < cache.patterns.length; i++) {
 		var p = cache.patterns[i],
@@ -95,8 +100,10 @@ exports.resolveAlias = function(ref, wiki) {
 };
 
 /*
-Drop the alias cache. Next lookup rebuilds.
+Drop the alias cache. Next lookup rebuilds. With no wiki argument, drops
+every wiki's cache — matches the existing call signature from startup.js.
 */
-exports.invalidateAliases = function() {
-	cache = null;
+exports.invalidateAliases = function(wiki) {
+	if(!caches) { return; }
+	if(wiki) { caches.delete(wiki); } else { caches = new WeakMap(); }
 };

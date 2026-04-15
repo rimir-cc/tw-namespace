@@ -33,12 +33,15 @@ typically tiny.
 
 var MOUNT_TAG = "$:/tags/NamespaceMount";
 
-// Cache: sorted array of {from, to, title} entries, longest `from` first.
-var cache = null;
+// Cache keyed per-wiki (WeakMap) so multiple concurrent wikis don't
+// share stale entries. Entry = sorted array of {from, to, title},
+// longest `from` first.
+var caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
 
 function buildCache(wiki) {
-	if(cache) { return; }
-	cache = [];
+	var entry = caches && caches.get(wiki);
+	if(entry) { return entry; }
+	entry = [];
 	var titles = wiki.filterTiddlers("[all[tiddlers+shadows]tag[" + MOUNT_TAG + "]]");
 	for(var i = 0; i < titles.length; i++) {
 		var t = wiki.getTiddler(titles[i]);
@@ -52,11 +55,13 @@ function buildCache(wiki) {
 		// a trailing separator somewhere).
 		from = from.replace(/^\/+/, "").replace(/\/+$/, "");
 		if(!from) { continue; }
-		cache.push({from: from, to: to, title: titles[i]});
+		entry.push({from: from, to: to, title: titles[i]});
 	}
 	// Longest from first — ensures the most-specific mount wins when
 	// two mounts could both match (e.g. `OWASP` vs `OWASP/ASVS`).
-	cache.sort(function(a, b) { return b.from.length - a.from.length; });
+	entry.sort(function(a, b) { return b.from.length - a.from.length; });
+	if(caches) { caches.set(wiki, entry); }
+	return entry;
 }
 
 /*
@@ -66,7 +71,7 @@ mount table to avoid cascades. (Use aliases for multi-step rewrites.)
 */
 exports.resolveMount = function(ref, wiki) {
 	if(!ref) { return null; }
-	buildCache(wiki);
+	var cache = buildCache(wiki);
 	for(var i = 0; i < cache.length; i++) {
 		var m = cache[i];
 		if(ref === m.from) { return m.to; }
@@ -79,8 +84,9 @@ exports.resolveMount = function(ref, wiki) {
 };
 
 /*
-Drop the mount cache. Next lookup rebuilds.
+Drop the mount cache. With no wiki argument, drops every wiki's cache.
 */
-exports.invalidateMounts = function() {
-	cache = null;
+exports.invalidateMounts = function(wiki) {
+	if(!caches) { return; }
+	if(wiki) { caches.delete(wiki); } else { caches = new WeakMap(); }
 };

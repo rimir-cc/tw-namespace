@@ -148,12 +148,19 @@ function cacheKey(pseudoName, prefix) {
 }
 
 /*
-Drop cached pseudo results. If `prefix` is null/empty, clear all entries
-for this wiki; otherwise drop every entry whose prefix part matches
-exactly, across all pseudo names.
+Drop cached pseudo results.
+  * With no wiki — drop every wiki's cache wholesale (useful in tests).
+  * With wiki, no prefix — drop all entries for that wiki.
+  * With wiki + prefix — drop only entries matching the prefix, across
+    all pseudo names.
 */
 exports.invalidatePseudoCache = function(prefix, wiki) {
-	var cache = getCache(wiki);
+	if(!caches) { return; }
+	if(!wiki) {
+		caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+		return;
+	}
+	var cache = caches.get(wiki);
 	if(!cache) { return; }
 	if(!prefix) {
 		cache.clear();

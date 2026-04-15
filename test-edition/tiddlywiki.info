@@ -1,0 +1,11 @@
+{
+    "description": "Test edition for namespace",
+    "plugins": [
+        "tiddlywiki/jasmine",
+        "rimir/namespace"
+    ],
+    "themes": [
+        "tiddlywiki/vanilla",
+        "tiddlywiki/snowwhite"
+    ]
+}
