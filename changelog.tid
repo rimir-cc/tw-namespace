@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/namespace/changelog
+
+|!Version |!Date |!Changes |
+|0.1.0 |2026-04-15 |Initial stage 1: walk-up resolver, replacement prettylink rule, unresolved styling. |

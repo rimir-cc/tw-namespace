@@ -1,0 +1,18 @@
+title: $:/plugins/rimir/namespace/styles
+tags: $:/tags/Stylesheet
+
+.ns-unresolved {
+	text-decoration: underline wavy;
+	text-decoration-color: var(--rr-danger, #c33);
+	opacity: 0.75;
+}
+
+.ns-unresolved::after {
+	content: " \26A0";
+	font-size: 0.8em;
+	color: var(--rr-danger, #c33);
+}
+
+.ns-resolved {
+	/* Inherits tc-tiddlylink styling; nothing to override in stage 1. */
+}

@@ -1,0 +1,59 @@
+title: $:/plugins/rimir/namespace/readme
+
+! Namespace
+
+Namespace-aware link resolution for TiddlyWiki. Replaces the core
+{{{ [[…]] }}} parser rule so link targets are resolved relative to the
+source tiddler's own title prefix.
+
+!! What it does (stage 1)
+
+A link {{{ [[REF]] }}} is resolved in this order:
+
+# ''Literal'' — if a tiddler titled exactly `REF` exists, use it.
+  ''~$:/…'' system links always match here.
+# ''Absolute'' — if `REF` contains a slash, it is treated as a full title.
+# ''Walk-up'' — walk up the source tiddler's title prefix:
+  from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
+  `a/b/REF`, `a/REF`, `REF`. First hit wins.
+# ''Unresolved'' — rendered with the `ns-unresolved` class
+  (wavy underline + ⚠ marker) and a tooltip listing the candidates tried.
+
+Example: a tiddler titled `a/b/OWASP/ASVS/4.0.3/docs/intro` can simply
+write {{{ [[V3.3]] }}} to refer to `a/b/OWASP/ASVS/4.0.3/V3.3` — no
+need to spell out the full path.
+
+!! How it works
+
+The wikirule converts {{{ [[REF]] }}} into:
+
+```
+<$let __nsref__="REF">
+  <$link to={{{ [<__nsref__>ns-resolve<currentTiddler>] }}}
+         class={{{ [<__nsref__>ns-resolve-class<currentTiddler>] }}}>
+    text
+  </$link>
+</$let>
+```
+
+Resolution happens at render time via the `ns-resolve` filter operator,
+so references still resolve correctly under transclusion (they follow
+the widget's `currentTiddler`, not the source tiddler of the text).
+
+!! Deferred
+
+Later stages will add:
+
+* `_latest` pseudo-segment (version-max resolution)
+* `\context` pragma, `<$context>` widget, and `context:` field overrides
+* Named aliases (and pattern aliases) for short cross-context shortcuts
+* Mount points / namespace root anchoring
+* Backlink indexer integration (so core search / relink see resolved targets)
+* Parallel treatment for transclusion {{{ {{…}} }}}
+
+!! Limitations of stage 1
+
+* Core TiddlyWiki's backlink index and the `relink` plugin only see the
+  literal `[[REF]]` string, not the resolved target. Backlinks from
+  walk-up-resolved references are therefore missing until stage 6 lands.
+* No configuration UI yet.
