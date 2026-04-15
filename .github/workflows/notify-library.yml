@@ -18,7 +18,7 @@ jobs:
           mkdir -p /tmp/plugins/rimir/namespace
           cp -r . /tmp/plugins/rimir/namespace/
           cd /tmp/plugins/rimir/namespace
-          TIDDLYWIKI_CLI_MODE=1 TIDDLYWIKI_PLUGIN_PATH=/tmp/plugins npx tiddlywiki test-edition --test
+          TIDDLYWIKI_CLI_MODE=1 TIDDLYWIKI_PLUGIN_PATH=/tmp/plugins npx tiddlywiki test-edition --test spec="namespace"
 
   notify:
     needs: test
