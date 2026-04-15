@@ -27,18 +27,19 @@ caption: NS
 !! Pin `_latest` in this tiddler's `\context`
 
 <$let
-	current-text={{!!text}}
+	raw-text={{{ [<currentTiddler>get[text]] }}}
 	pinned-text={{{ [<currentTiddler>ns-pin-context[]] }}}
 >
-<$list filter="[<current-text>!match<pinned-text>]" emptyMessage="<em>No `\context` pragma with drifting pseudos found.</em>">
+<$list filter="[<raw-text>!match<pinned-text>]" variable="_ignore" emptyMessage="<em>No `\context` pragma with drifting pseudos found.</em>">
 
 The `\context` pragma in this tiddler contains a pseudo-segment
 (e.g. `_latest`). Click to snapshot against its current resolution —
 the pragma text is rewritten to the concrete value, freezing the
 tiddler's references regardless of future version drift.
 
-<$button>Pin now
-<$action-setfield text=<<pinned-text>>/>
+<$button>
+Pin now
+<$action-setfield $tiddler=<<currentTiddler>> text=<<pinned-text>>/>
 </$button>
 
 </$list>
