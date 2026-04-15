@@ -1,0 +1,14 @@
+title: $:/plugins/rimir/namespace/examples/data/aliases/pattern-NS_V
+tags: $:/tags/NamespacePatternAlias
+pattern: ^NS_V(.+)$
+replacement: $:/plugins/rimir/namespace/examples/data/versions/_latest/V$1
+
+Pattern alias: any `NS_V<anything>` →
+`…/examples/data/versions/_latest/V<anything>`.
+
+Anchored with `^…$` so the whole ref must match. The `$1` capture
+in `replacement` comes from `(.+)` in `pattern`. Expansion goes through
+pseudo expansion, so `_latest` drifts as versions appear.
+
+Using a pattern means you don't need one alias tiddler per version —
+one pattern covers V3.3, V4.2, V5.0, etc.

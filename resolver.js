@@ -7,22 +7,27 @@ Pure resolver for namespace-aware link references.
 
 Resolution pipeline for a reference REF looked up from source tiddler SRC:
 
-  0. Expand pseudo-segments — any segment beginning with "_" is looked up
-                      in the pseudo-registry (module-type:
-                      rimir-ns-pseudo). Matching resolvers are called with
-                      (prefix, wiki) and return a replacement segment, or
-                      null to fail expansion. Unknown _-prefixed segments
-                      pass through unchanged (treated as literal).
-  1. Literal        — expanded REF exists as-is (covers $:/… system titles).
-  2. Absolute       — REF contains '/', looked up literally (same as #1
-                      in current stages; meaningful once mount points land).
-  3. Context prefix — if options.context is set (from \context pragma,
+  1. Literal on raw  — REF as typed exists as-is. A real tiddler always
+                      beats an alias to avoid silent redirection.
+  2. Alias rewrite  — exact (`$:/tags/NamespaceAlias`) or pattern
+                      (`$:/tags/NamespacePatternAlias`) alias rewrites REF.
+                      Chained up to 3 hops for cycle safety.
+  3. Expand pseudos — any segment beginning with "_" is looked up in the
+                      pseudo-registry (module-type: rimir-ns-pseudo).
+                      Matching resolvers receive (prefix, wiki) and
+                      return a replacement segment, or null to fail
+                      expansion. Unknown _-prefixed segments pass through.
+  4. Literal on expanded — catches both the "ref had pseudos" and the
+                      "ref was aliased and now exists" cases.
+  5. Absolute       — REF contains '/', looked up literally only; no
+                      further walk-up/context.
+  6. Context prefix — if options.context is set (from \context pragma,
                       <$context> widget, or context field), try
                       "<context>/REF" before walk-up. Lets a tiddler
                       declare "resolve as if I lived under this prefix".
-  4. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
+  7. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
                       and try "<prefix>/REF" at each depth. First hit wins.
-  5. Unresolved     — no candidate matched.
+  8. Unresolved     — no candidate matched.
 
 Pseudo-segments are pluggable: each resolver is its own JS module with
 module-type `rimir-ns-pseudo`, exporting `name` (the full segment string
@@ -204,11 +209,15 @@ exports.expandPseudoSegments = function(ref, wiki) {
 
 /* ---------- main resolver ---------- */
 
+var aliases = require("$:/plugins/rimir/namespace/aliases.js");
+
+var ALIAS_MAX_HOPS = 3;
+
 /*
 Resolve a reference.
 
 ref:         the raw link target as the user typed it (e.g. "V3.3",
-             "OWASP/ASVS/_latest/V3.3")
+             "OWASP/ASVS/_latest/V3.3", "NS_V3.3")
 sourceTitle: title of the tiddler being rendered
 wiki:        $tw.wiki (needs tiddlerExists, isShadowTiddler, each, eachShadow)
 options:     optional; {context: "<prefix>"} to supply a declared context
@@ -216,7 +225,7 @@ options:     optional; {context: "<prefix>"} to supply a declared context
              are expanded before use.
 
 Returns: {status, resolved, tried}
-  status:   "literal" | "absolute" | "context" | "walkup" | "unresolved"
+  status:   "literal" | "alias" | "absolute" | "context" | "walkup" | "unresolved"
   resolved: resolved title or null
   tried:    ordered array of every title we checked (useful for tooltips)
 */
@@ -226,19 +235,36 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 	if(!ref) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 0. Expand pseudo-segments, if any.
-	var expanded = exports.expandPseudoSegments(ref, wiki);
+	// 1. Literal on raw ref — a real tiddler always beats an alias.
+	tried.push(ref);
+	if(exists(wiki, ref)) {
+		return {status: "literal", resolved: ref, tried: tried};
+	}
+	// 2. Alias rewrite — chain up to ALIAS_MAX_HOPS hops for cycle safety.
+	var aliasRef = ref;
+	for(var d = 0; d < ALIAS_MAX_HOPS; d++) {
+		var next = aliases.resolveAlias(aliasRef, wiki);
+		if(!next || next === aliasRef) { break; }
+		aliasRef = next;
+	}
+	var wasAliased = (aliasRef !== ref);
+	if(wasAliased) { tried.push(aliasRef); }
+	// 3. Expand pseudo-segments on the (possibly aliased) ref.
+	var expanded = exports.expandPseudoSegments(aliasRef, wiki);
 	if(expanded === null) {
-		return {status: "unresolved", resolved: null, tried: [ref]};
+		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 1. Literal — always try first so $:/… and exact-title refs win.
-	tried.push(expanded);
-	if(exists(wiki, expanded)) {
-		return {status: "literal", resolved: expanded, tried: tried};
+	if(expanded !== aliasRef) { tried.push(expanded); }
+	// 4. Literal on expanded — catches "ref was aliased and/or pseudo-
+	//    expanded to a real title".
+	if(expanded !== ref && exists(wiki, expanded)) {
+		return {
+			status: wasAliased ? "alias" : "literal",
+			resolved: expanded,
+			tried: tried
+		};
 	}
-	// 2. Absolute (ref contains '/'): stop after the literal check — don't
-	//    walk up. In current stages this branch is identical to #1; it
-	//    becomes meaningful once mount points prepend a root prefix.
+	// 5. Absolute (has '/'): no further walk-up or context.
 	if(expanded.indexOf("/") !== -1) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
@@ -246,7 +272,7 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 	if(expanded.indexOf("$:/") === 0) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 3. Context prefix — try "<context>/REF" when a declared context is
+	// 6. Context prefix — try "<context>/REF" when a declared context is
 	//    present. Pseudo-segments in the context string expand too, so
 	//    e.g. `\context OWASP/ASVS/_latest` drifts with the newest version.
 	if(options.context) {
@@ -259,7 +285,7 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 			}
 		}
 	}
-	// 4. Walk-up from the source tiddler's prefix.
+	// 7. Walk-up from the source tiddler's prefix.
 	if(sourceTitle) {
 		var segs = exports.splitPath(sourceTitle);
 		// For $:/ titles the first segment is the "$:" marker; stop at i=2

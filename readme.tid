@@ -14,15 +14,20 @@ for live, in-plugin demos of every feature described below.
 
 A link {{{ [[REF]] }}} is resolved in this order:
 
-# ''Pseudo-segment expansion'' — any segment of `REF` starting with `_`
-  is looked up in the pseudo-segment registry. A matching resolver is
-  called with the preceding prefix and returns the replacement segment
-  (or null to fail expansion). Unknown `_`-prefixed segments pass through
-  as literal.
-# ''Literal'' — if the (expanded) `REF` is an exact tiddler title, use it.
-  `~$:/…` system links and shadow tiddlers match here.
-# ''Absolute'' — if `REF` contains a slash, it is treated as a full title
-  (no walk-up, no context prefix).
+# ''Literal on raw REF'' — a real tiddler always beats an alias or
+  pseudo expansion. Avoids silent redirection if a tiddler and an alias
+  share a name.
+# ''Alias rewrite'' — exact aliases (tiddlers tagged
+  `$:/tags/NamespaceAlias` with `short` + `expands-to` fields) and
+  pattern aliases (`$:/tags/NamespacePatternAlias`, `pattern` +
+  `replacement`). Chained up to 3 hops for cycle safety.
+# ''Pseudo-segment expansion'' — any segment starting with `_` is looked
+  up in the pseudo-registry. Matching resolvers receive `(prefix, wiki)`
+  and return a replacement segment or null to fail expansion.
+# ''Literal on expanded REF'' — catches the aliased or pseudo-expanded
+  forms.
+# ''Absolute'' — if REF contains a slash at this point, it's looked up
+  literally only (no walk-up, no context prefix).
 # ''Context prefix'' — if a context is declared (see below), try
   `<context>/REF`. Pseudo-segments inside the context are also expanded,
   so `\context OWASP/ASVS/_latest` drifts with the newest version.
@@ -30,7 +35,7 @@ A link {{{ [[REF]] }}} is resolved in this order:
   from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
 # ''Unresolved'' — rendered with the `ns-unresolved` class
-  (wavy underline + ⚠ marker) and a tooltip listing the candidates tried.
+  (wavy underline + ⚠ marker).
 
 !! Declaring a context
 
@@ -65,6 +70,31 @@ Priority: widget variable (from pragma or `<$context>`) wins over field.
 That makes `\context` an effective "pin" — dropping `\context OWASP/ASVS/4.0.3`
 at the top of a doc overrides any field-based context and freezes the
 doc's resolutions against version 4.0.3.
+
+!! Aliases — short tokens for common refs
+
+Create a tiddler tagged `$:/tags/NamespaceAlias`:
+
+```
+short: OWASP_V3.3
+expands-to: OWASP/ASVS/_latest/V3.3
+```
+
+Now {{{ [[OWASP_V3.3]] }}} from anywhere resolves via the alias +
+`_latest` expansion.
+
+For many similar refs, use a pattern alias (tag
+`$:/tags/NamespacePatternAlias`):
+
+```
+pattern: ^OWASP_V(.+)$
+replacement: OWASP/ASVS/_latest/V$1
+```
+
+Now `OWASP_V3.3`, `OWASP_V4.2`, `OWASP_V5.0`, … all resolve.
+
+Exact beats pattern. See the [[examples tab|$:/plugins/rimir/namespace/examples/aliases]]
+for live demos.
 
 !! Built-in pseudo-segments
 

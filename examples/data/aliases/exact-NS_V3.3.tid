@@ -1,0 +1,10 @@
+title: $:/plugins/rimir/namespace/examples/data/aliases/exact-NS_V3.3
+tags: $:/tags/NamespaceAlias
+short: NS_V3.3
+expands-to: $:/plugins/rimir/namespace/examples/data/versions/_latest/V3.3
+
+Exact alias: `NS_V3.3` → `…/examples/data/versions/_latest/V3.3`.
+
+The `short` field is the token users type; `expands-to` is the rewrite.
+The expansion contains `_latest`, which the resolver expands on the fly
+— so this alias tracks the newest version child.

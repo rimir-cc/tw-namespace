@@ -1,0 +1,89 @@
+title: $:/plugins/rimir/namespace/examples/aliases
+
+! Aliases — short tokens → long paths
+
+Aliases rewrite a whole reference //before// pseudo-segment expansion.
+Two shapes:
+
+* ''Exact'' — tiddlers tagged `$:/tags/NamespaceAlias` with fields
+  `short` (the token users type) and `expands-to` (the rewrite).
+  O(1) lookup.
+* ''Pattern'' — tiddlers tagged `$:/tags/NamespacePatternAlias` with
+  `pattern` (JS regex) and `replacement` (substitution, supports `$1`…`$9`).
+  Tried in order; first match wins.
+
+Exact beats pattern. The rewrite is re-run up to 3 times for chained
+aliases (cycle safety), then pseudo expansion runs on the final ref.
+
+!! Shipped example aliases
+
+This plugin ships two demo aliases:
+
+* Exact: [[$:/plugins/rimir/namespace/examples/data/aliases/exact-NS_V3.3]]
+  — `NS_V3.3` → `…/examples/data/versions/_latest/V3.3`
+* Pattern: [[$:/plugins/rimir/namespace/examples/data/aliases/pattern-NS_V]]
+  — `NS_V<anything>` → `…/examples/data/versions/_latest/V<anything>`
+
+!! Live references
+
+With the exact alias alone:
+
+* [[NS_V3.3]] — resolves via exact alias → `…/4.0.3/V3.3`
+
+With the pattern alias:
+
+* [[NS_V3.3]] — exact still wins (O(1) lookup beats pattern)
+* [[NS_V4.2]] — exact doesn't match; pattern catches it → `…/4.0.3/V4.2`
+
+Non-matching refs fall through:
+
+* [[NS_nothing]] — no exact, pattern doesn't match `V…` → unresolved (⚠)
+
+!! Precedence recap
+
+For every link:
+
+# ''Literal on raw REF first'' — a real tiddler named `NS_V3.3` would
+  beat the alias. This avoids silent redirection if you accidentally
+  name a tiddler the same as an alias.
+# Alias rewrite (exact, then pattern).
+# Pseudo expansion of the rewritten ref.
+# Normal literal / context / walk-up pipeline.
+
+!! Writing your own
+
+Create a tiddler with the appropriate tag. No JS required:
+
+''Exact:''
+
+```
+title: my-aliases/project-x
+tags: $:/tags/NamespaceAlias
+short: PX
+expands-to: projects/projectX/_latest
+```
+
+→ `[[PX]]` now resolves via the latest `projectX` version.
+
+''Pattern:''
+
+```
+title: my-aliases/OWASP-ASVS
+tags: $:/tags/NamespacePatternAlias
+pattern: ^OWASP_V(.+)$
+replacement: OWASP/ASVS/_latest/V$1
+```
+
+→ `[[OWASP_V3.3]]`, `[[OWASP_V4.2]]`, etc. all resolve via the latest
+ASVS version.
+
+!! Gotchas
+
+* ''Patterns are not auto-anchored.'' Use `^…$` if you want the whole
+  ref to match. Otherwise `NS_V(.+)` also fires inside longer refs.
+* ''Invalid regex'' in a pattern alias is logged to the console and the
+  alias is skipped (not fatal).
+* ''Chained aliases'' stop after 3 hops — prevents infinite loops if
+  `A → B → A`.
+* ''Core backlink index'' still only sees the literal (pre-alias) ref.
+  An upcoming stage adds an indexer that'll capture resolved targets.
