@@ -8,26 +8,29 @@ Pure resolver for namespace-aware link references.
 Resolution pipeline for a reference REF looked up from source tiddler SRC:
 
   1. Literal on raw  — REF as typed exists as-is. A real tiddler always
-                      beats an alias to avoid silent redirection.
+                      beats an alias/mount to avoid silent redirection.
   2. Alias rewrite  — exact (`$:/tags/NamespaceAlias`) or pattern
                       (`$:/tags/NamespacePatternAlias`) alias rewrites REF.
                       Chained up to 3 hops for cycle safety.
-  3. Expand pseudos — any segment beginning with "_" is looked up in the
+  3. Mount rewrite  — `$:/tags/NamespaceMount` with `from` / `to` fields.
+                      Strict prefix match; longest `from` wins. One-pass
+                      (no cascading).
+  4. Expand pseudos — any segment beginning with "_" is looked up in the
                       pseudo-registry (module-type: rimir-ns-pseudo).
                       Matching resolvers receive (prefix, wiki) and
                       return a replacement segment, or null to fail
                       expansion. Unknown _-prefixed segments pass through.
-  4. Literal on expanded — catches both the "ref had pseudos" and the
-                      "ref was aliased and now exists" cases.
-  5. Absolute       — REF contains '/', looked up literally only; no
+  5. Literal on expanded — catches any of "ref had pseudos", "ref was
+                      aliased", "ref was mounted" and now exists.
+  6. Absolute       — REF contains '/', looked up literally only; no
                       further walk-up/context.
-  6. Context prefix — if options.context is set (from \context pragma,
+  7. Context prefix — if options.context is set (from \context pragma,
                       <$context> widget, or context field), try
                       "<context>/REF" before walk-up. Lets a tiddler
                       declare "resolve as if I lived under this prefix".
-  7. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
+  8. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
                       and try "<prefix>/REF" at each depth. First hit wins.
-  8. Unresolved     — no candidate matched.
+  9. Unresolved     — no candidate matched.
 
 Pseudo-segments are pluggable: each resolver is its own JS module with
 module-type `rimir-ns-pseudo`, exporting `name` (the full segment string
@@ -210,6 +213,7 @@ exports.expandPseudoSegments = function(ref, wiki) {
 /* ---------- main resolver ---------- */
 
 var aliases = require("$:/plugins/rimir/namespace/aliases.js");
+var mounts  = require("$:/plugins/rimir/namespace/mounts.js");
 
 var ALIAS_MAX_HOPS = 3;
 
@@ -225,7 +229,8 @@ options:     optional; {context: "<prefix>"} to supply a declared context
              are expanded before use.
 
 Returns: {status, resolved, tried}
-  status:   "literal" | "alias" | "absolute" | "context" | "walkup" | "unresolved"
+  status:   "literal" | "alias" | "mount" | "absolute" | "context" |
+            "walkup" | "unresolved"
   resolved: resolved title or null
   tried:    ordered array of every title we checked (useful for tooltips)
 */
@@ -235,34 +240,38 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 	if(!ref) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 1. Literal on raw ref — a real tiddler always beats an alias.
+	// 1. Literal on raw ref — a real tiddler always beats an alias/mount.
 	tried.push(ref);
 	if(exists(wiki, ref)) {
 		return {status: "literal", resolved: ref, tried: tried};
 	}
 	// 2. Alias rewrite — chain up to ALIAS_MAX_HOPS hops for cycle safety.
-	var aliasRef = ref;
+	var rewritten = ref;
 	for(var d = 0; d < ALIAS_MAX_HOPS; d++) {
-		var next = aliases.resolveAlias(aliasRef, wiki);
-		if(!next || next === aliasRef) { break; }
-		aliasRef = next;
+		var next = aliases.resolveAlias(rewritten, wiki);
+		if(!next || next === rewritten) { break; }
+		rewritten = next;
 	}
-	var wasAliased = (aliasRef !== ref);
-	if(wasAliased) { tried.push(aliasRef); }
-	// 3. Expand pseudo-segments on the (possibly aliased) ref.
-	var expanded = exports.expandPseudoSegments(aliasRef, wiki);
+	var wasAliased = (rewritten !== ref);
+	if(wasAliased) { tried.push(rewritten); }
+	// 3. Mount rewrite — single pass, longest `from` wins.
+	var mounted = mounts.resolveMount(rewritten, wiki);
+	if(mounted && mounted !== rewritten) {
+		rewritten = mounted;
+		tried.push(rewritten);
+	}
+	var wasMounted = (mounted != null);
+	// 4. Expand pseudo-segments on the (possibly rewritten) ref.
+	var expanded = exports.expandPseudoSegments(rewritten, wiki);
 	if(expanded === null) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	if(expanded !== aliasRef) { tried.push(expanded); }
-	// 4. Literal on expanded — catches "ref was aliased and/or pseudo-
-	//    expanded to a real title".
+	if(expanded !== rewritten) { tried.push(expanded); }
+	// 5. Literal on expanded — catches "ref was aliased/mounted and/or
+	//    pseudo-expanded to a real title".
 	if(expanded !== ref && exists(wiki, expanded)) {
-		return {
-			status: wasAliased ? "alias" : "literal",
-			resolved: expanded,
-			tried: tried
-		};
+		var status = wasMounted ? "mount" : (wasAliased ? "alias" : "literal");
+		return {status: status, resolved: expanded, tried: tried};
 	}
 	// 5. Absolute (has '/'): no further walk-up or context.
 	if(expanded.indexOf("/") !== -1) {

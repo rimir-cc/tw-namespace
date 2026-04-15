@@ -96,6 +96,21 @@ Now `OWASP_V3.3`, `OWASP_V4.2`, `OWASP_V5.0`, … all resolve.
 Exact beats pattern. See the [[examples tab|$:/plugins/rimir/namespace/examples/aliases]]
 for live demos.
 
+!! Mount points — short prefixes for deep subtrees
+
+For a whole subtree rather than a single token, use a mount
+(tag `$:/tags/NamespaceMount`):
+
+```
+from: docs
+to: project-x/documentation/public
+```
+
+Now `[[docs/intro]]`, `[[docs/api/v2]]`, etc. rewrite to
+`project-x/documentation/public/intro`, `…/api/v2`, and so on. Longest
+`from` wins when multiple mounts could match. See the
+[[Mount points example|$:/plugins/rimir/namespace/examples/mounts]].
+
 !! Built-in pseudo-segments
 
 * ''`_latest`'' — resolves to the highest-version immediate child of its

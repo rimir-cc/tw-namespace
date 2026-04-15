@@ -1,0 +1,8 @@
+title: $:/plugins/rimir/namespace/examples/data/mounts/versions
+tags: $:/tags/NamespaceMount
+from: ns-docs
+to: $:/plugins/rimir/namespace/examples/data/versions
+
+Mount point. The logical prefix `ns-docs` maps to the physical title
+prefix `$:/plugins/rimir/namespace/examples/data/versions`. So a ref
+like `[[ns-docs/4.0.3/V3.3]]` rewrites internally to the long form.

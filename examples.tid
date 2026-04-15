@@ -21,6 +21,8 @@ Each page focuses on one feature. Click through:
   declarative, tiddler-level.
 # [[Aliases|$:/plugins/rimir/namespace/examples/aliases]] — short tokens
   rewritten to longer paths, exact and pattern.
+# [[Mount points|$:/plugins/rimir/namespace/examples/mounts]] — logical
+  prefix → physical prefix, for cleaner top-level names.
 # [[Custom pseudo-segment|$:/plugins/rimir/namespace/examples/custom-pseudo]] —
   write your own `_foo`.
 
@@ -34,6 +36,7 @@ Under `$:/plugins/rimir/namespace/examples/data/`:
 * `docs/intro`, `docs/api`, `docs/architecture`
 * `aliases/exact-NS_V3.3` (tagged `$:/tags/NamespaceAlias`)
 * `aliases/pattern-NS_V` (tagged `$:/tags/NamespacePatternAlias`)
+* `mounts/versions` (tagged `$:/tags/NamespaceMount`)
 
 Open any of these and browse around — they're small, wired to the
 examples, and demonstrate the resolver in its natural habitat.

@@ -1,6 +1,7 @@
 title: $:/plugins/rimir/namespace/changelog
 
 |!Version |!Date |!Changes |
+|0.1.5 |2026-04-15 |Stage 5: mount points. Tiddlers tagged `$:/tags/NamespaceMount` with `from` + `to` fields rewrite a logical prefix to a physical one (pure prefix match, longest-first). Applied between alias and pseudo expansion. New `mount` status. Examples tab gets a //Mount points// page plus a demo mount. |
 |0.1.4 |2026-04-15 |Stage 4: named aliases. Exact (`$:/tags/NamespaceAlias` with `short` + `expands-to` fields) and pattern (`$:/tags/NamespacePatternAlias` with `pattern` + `replacement`). Applied before pseudo expansion; chained up to 3 hops. Literal-on-raw-ref still beats aliases. Examples tab includes a new //Aliases// page plus two demo alias tiddlers shipped in the plugin. |
 |0.1.3 |2026-04-15 |Live examples shipped in the plugin (examples tab) with bundled demo data. Walk-up now allowed within `$:/` titles (stops at a 2-segment minimum) so shadow-tiddler demos can showcase it. |
 |0.1.2 |2026-04-15 |Stage 3: declared context. `\context <prefix>` pragma, `<$context prefix="…">` widget, and `context:` field on the tiddler. All three set the `ns-context` variable; the resolver tries `<context>/REF` before walk-up. Pseudo-segments inside the context prefix are expanded too. |

@@ -1,0 +1,69 @@
+title: $:/plugins/rimir/namespace/examples/mounts
+
+! Mount points — logical prefix → physical prefix
+
+Mount points map a short logical namespace prefix to a longer physical
+one. Pure prefix rewrite — no regex required. Use them when you want a
+clean, short top-level name for a deeply-nested tree.
+
+Declare a mount by creating a tiddler tagged `$:/tags/NamespaceMount`:
+
+```
+title: my-mount
+tags: $:/tags/NamespaceMount
+from: ns-docs
+to: $:/plugins/rimir/namespace/examples/data/versions
+```
+
+!! Shipped example
+
+This plugin ships one demo mount:
+[[$:/plugins/rimir/namespace/examples/data/mounts/versions]]
+
+* `from: ns-docs`
+* `to: $:/plugins/rimir/namespace/examples/data/versions`
+
+!! Live references via the mount
+
+* [[ns-docs]] — equals `from`, so rewrites to the bare `to` (which isn't
+  a real tiddler here, so ⚠ unresolved — expected)
+* [[ns-docs/4.0.3/V3.3]] — rewrites to `…/data/versions/4.0.3/V3.3` → resolves
+* [[ns-docs/4.0.3/V4.2]] — rewrites to `…/data/versions/4.0.3/V4.2` → resolves
+* [[ns-docs/_latest/V3.3]] — rewrites, then `_latest` expands to `4.0.3`
+  → `…/data/versions/4.0.3/V3.3` → resolves
+* [[ns-docs/3.0/V3.3]] — older version, still resolves
+
+!! Rules
+
+* ''Exact match'' — REF equals `from` → rewrites to `to`.
+* ''Prefix match'' — REF starts with `from + "/"` → rewrites the prefix,
+  keeps the rest.
+* ''Longest-match wins'' — if two mounts could match (e.g. `foo` and
+  `foo/bar`), the longer `from` takes precedence.
+* ''One-pass'' — mount results do //not// get re-run through the mount
+  table. Use aliases for chained/multi-step rewrites.
+
+!! Mount vs alias — when to use which
+
+* ''Alias'' — rewrites the whole ref. Good for standalone shortcuts:
+  `NS_V3.3` → `…/versions/_latest/V3.3`. Exact lookup or regex pattern.
+* ''Mount'' — rewrites a //prefix//. Good for renaming/shortening a
+  whole subtree: `ns-docs/*` → `$:/plugins/.../versions/*`. Declarative,
+  no regex.
+
+Rule of thumb: use a mount when you have many refs sharing a common
+prefix and you want //all// of them to see the rewrite; use an alias
+for single named shortcuts or when the substitution is non-prefix.
+
+!! Core use cases
+
+# ''Stripping disk-path noise.'' If your titles on disk include
+  `a/b/c/d/OWASP/ASVS/…` for organisational reasons, a mount
+  `from: OWASP  to: a/b/c/d/OWASP` lets authors write `[[OWASP/ASVS/V3.3]]`
+  while the physical titles stay long. (Better still: strip the prefix
+  at the `tiddlywiki.files` layer so titles are clean to begin with —
+  then you don't need the mount.)
+# ''Short roots for deep trees.'' `docs` → `project-x/documentation/public`.
+# ''Federation.'' `partner` → `imports/partner-company`.
+# ''Renaming a subtree without rewriting every link.'' Point the mount
+  at the new location; keep the old ref form working everywhere.

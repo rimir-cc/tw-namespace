@@ -23,6 +23,7 @@ Walking ancestors costs O(depth) per change; negligible.
 
 var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 var aliases  = require("$:/plugins/rimir/namespace/aliases.js");
+var mounts   = require("$:/plugins/rimir/namespace/mounts.js");
 
 exports.name = "rimir-namespace-cache-invalidation";
 exports.platforms = ["browser", "node"];
@@ -31,8 +32,9 @@ exports.synchronous = true;
 exports.startup = function() {
 	if(!$tw.wiki || !$tw.wiki.addEventListener) { return; }
 	$tw.wiki.addEventListener("change", function(changes) {
-		// Alias cache: whole-cache drop. Cheap to rebuild.
+		// Alias + mount caches: whole-cache drop. Cheap to rebuild.
 		aliases.invalidateAliases();
+		mounts.invalidateMounts();
 		// Pseudo cache: prefix-scoped. Walk ancestors of every changed title.
 		for(var title in changes) {
 			var idx = title.lastIndexOf("/");
