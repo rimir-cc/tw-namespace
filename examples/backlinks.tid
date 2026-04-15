@@ -1,0 +1,70 @@
+title: $:/plugins/rimir/namespace/examples/backlinks
+
+! Backlinks — reverse index of resolved targets
+
+Core TiddlyWiki's backlink cascade and the `relink` plugin only see the
+literal `[[REF]]` string you type. With the namespace resolver, the
+actual target depends on the source tiddler's context, walk-up, aliases,
+and so on — so core backlinks undercount.
+
+This plugin ships a backlinks indexer that scans every tiddler body
+(wikitext + markdown), resolves each `[[REF]]` reference with the source
+tiddler's context, and keeps a reverse-map of `target → sources`.
+
+!! The `NS Backlinks` tab
+
+Open any tiddler's info sidebar (the `i` icon) and find the ''NS'' tab.
+It shows every tiddler that references //this one// via any resolution
+path — including walk-up, aliases, mounts, context, and transclusions.
+
+Try it on shipped data:
+
+* [[$:/plugins/rimir/namespace/examples/data/versions/4.0.3/V3.3]] —
+  open its info sidebar. The ''NS Backlinks'' tab lists tiddlers that
+  resolve to it, including the aliases and mount demos that point at it
+  via `_latest`.
+* [[$:/plugins/rimir/namespace/examples/data/docs/api]] — the intro
+  page references it via walk-up; this tab reveals that.
+
+!! Filter operators
+
+For scripting or custom views:
+
+* `[<title>ns-backlinks[]]` — source tiddlers that reference `<title>`
+* `[<title>ns-forwardlinks[]]` — targets referenced by `<title>`
+
+Example uses:
+
+```
+<$list filter="[<currentTiddler>ns-backlinks[]]">
+<$link to=<<currentTiddler>>/> ·
+</$list>
+```
+
+!! How it works
+
+* At startup, every wikitext/markdown tiddler is scanned once (deferred
+  one tick so it doesn't block initial render).
+* On each wiki change, only the changed tiddlers are re-indexed.
+* The indexer detects per-source context from a `\context` pragma
+  on the first non-blank body line, falling back to the `context`
+  field. `<$context>` widget scoping is not tracked — documented as a
+  known limitation.
+
+!! Caveats
+
+* ''Regex-based extraction.'' The indexer uses regex on the body to
+  find `[[…]]` and `{{…}}` references. Inside code blocks / verbatim
+  regions it may produce false positives. For the backlinks use case,
+  extra edges are harmless.
+* ''No `relink` integration.'' The `relink` plugin rewrites link text
+  on tiddler rename. It operates on core TW's link scan and is not
+  yet namespace-aware. Renaming a tiddler that's reachable via walk-up
+  or `_latest` may leave stale refs that continue to auto-resolve via
+  the new layout, or become unresolved if the layout doesn't support
+  them any more — the indexer //will// reflect the new reality, but
+  `relink` won't suggest rewrites for cases where it should.
+* ''Transclusion targets.'' `{{target}}` transclusions are indexed via
+  the same regex, but the core transcludeinline rule still sees only
+  the literal target. Namespace-aware transclusion (so `{{V3.3}}` from
+  a context-scoped source resolves like `[[V3.3]]` does) is deferred.

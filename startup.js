@@ -24,6 +24,7 @@ Walking ancestors costs O(depth) per change; negligible.
 var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 var aliases  = require("$:/plugins/rimir/namespace/aliases.js");
 var mounts   = require("$:/plugins/rimir/namespace/mounts.js");
+var indexer  = require("$:/plugins/rimir/namespace/indexer.js");
 
 exports.name = "rimir-namespace-cache-invalidation";
 exports.platforms = ["browser", "node"];
@@ -36,12 +37,24 @@ exports.startup = function() {
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();
 		// Pseudo cache: prefix-scoped. Walk ancestors of every changed title.
+		var changedTitles = [];
 		for(var title in changes) {
+			changedTitles.push(title);
 			var idx = title.lastIndexOf("/");
 			while(idx > 0) {
 				resolver.invalidatePseudoCache(title.substring(0, idx), $tw.wiki);
 				idx = title.lastIndexOf("/", idx - 1);
 			}
 		}
+		// Backlinks index: incremental re-index for changed sources.
+		indexer.reindexMany(changedTitles, $tw.wiki);
 	});
+	// Initial backlinks index build — deferred one tick so other startup
+	// modules finish first. On large wikis this can be noticeable; if it
+	// matters, defer further or run in a web worker (not done here).
+	if(typeof setTimeout === "function") {
+		setTimeout(function() { indexer.rebuildAll($tw.wiki); }, 0);
+	} else {
+		indexer.rebuildAll($tw.wiki);
+	}
 };

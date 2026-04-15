@@ -34,6 +34,7 @@ override the tiddler-level default.
 "use strict";
 
 var resolver = require("$:/plugins/rimir/namespace/resolver.js");
+var indexer = require("$:/plugins/rimir/namespace/indexer.js");
 
 function getContext(sourceTitle, options) {
 	// Widget variable first (set by <$context> / \context pragma).
@@ -71,6 +72,67 @@ exports["ns-resolve-class"] = function(source, operator, options) {
 		} else {
 			results.push("tc-tiddlylink ns-resolved");
 		}
+	});
+	return results;
+};
+
+/*
+[<title>ns-backlinks[]]
+  → titles that reference `title` via any of literal, alias, mount,
+    context, walk-up, pseudo-expanded, or transclusion. Sourced from
+    the backlinks indexer — only accurate for indexable tiddlers
+    (wikitext + markdown). Input titles are each looked up; outputs
+    are union'd in sort order.
+*/
+exports["ns-backlinks"] = function(source, operator, options) {
+	var results = {};
+	source(function(tiddler, title) {
+		var sources = indexer.getBacklinks(title);
+		for(var i = 0; i < sources.length; i++) { results[sources[i]] = true; }
+	});
+	return Object.keys(results).sort();
+};
+
+/*
+[<title>ns-forwardlinks[]]
+  → titles that `title` references via the resolver. Diagnostic flip
+    side of ns-backlinks.
+*/
+exports["ns-forwardlinks"] = function(source, operator, options) {
+	var results = {};
+	source(function(tiddler, title) {
+		var targets = indexer.getForwardLinks(title);
+		for(var i = 0; i < targets.length; i++) { results[targets[i]] = true; }
+	});
+	return Object.keys(results).sort();
+};
+
+/*
+[<title>ns-pin-context[]]
+  → title's body text with any `\context` pragma expanded (`_latest` and
+    other pseudos resolved to current values). Non-destructive: returns
+    the rewritten text; caller is responsible for persisting via
+    $action-setfield. If no pragma or nothing to rewrite, returns the
+    text unchanged.
+
+    Typical use: <$button>
+                   Pin _latest
+                   <$action-setfield text={{{ [<currentTiddler>ns-pin-context[]] }}}/>
+                 </$button>
+*/
+var RE_PRAGMA = /^(\s*\\context\s+)(\S+)(.*)$/m;
+exports["ns-pin-context"] = function(source, operator, options) {
+	var results = [];
+	source(function(tiddler, title) {
+		var t = options.wiki.getTiddler(title);
+		if(!t || !t.fields) { results.push(""); return; }
+		var text = t.fields.text || "";
+		var m = text.match(RE_PRAGMA);
+		if(!m) { results.push(text); return; }
+		var prefix = m[2],
+			expanded = resolver.expandPseudoSegments(prefix, options.wiki);
+		if(!expanded || expanded === prefix) { results.push(text); return; }
+		results.push(text.substring(0, m.index) + m[1] + expanded + m[3] + text.substring(m.index + m[0].length));
 	});
 	return results;
 };

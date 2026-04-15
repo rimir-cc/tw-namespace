@@ -1,0 +1,45 @@
+title: $:/plugins/rimir/namespace/backlinks-tab
+tags: $:/tags/TiddlerInfo
+caption: NS
+
+\whitespace trim
+
+!! Backlinks
+
+<$let refs={{{ [<currentTiddler>ns-backlinks[]] }}}>
+<$list filter="[<refs>!is[blank]]" emptyMessage="<em>No tiddlers reference this one via the namespace resolver.</em>">
+<$list filter="[enlist<refs>]">
+* <$link to=<<currentTiddler>>/>
+</$list>
+</$list>
+</$let>
+
+!! Forward links (namespace-resolved)
+
+<$let fwd={{{ [<currentTiddler>ns-forwardlinks[]] }}}>
+<$list filter="[<fwd>!is[blank]]" emptyMessage="<em>This tiddler has no namespace-resolved references.</em>">
+<$list filter="[enlist<fwd>]">
+* <$link to=<<currentTiddler>>/>
+</$list>
+</$list>
+</$let>
+
+!! Pin `_latest` in this tiddler's `\context`
+
+<$let
+	current-text={{!!text}}
+	pinned-text={{{ [<currentTiddler>ns-pin-context[]] }}}
+>
+<$list filter="[<current-text>!match<pinned-text>]" emptyMessage="<em>No `\context` pragma with drifting pseudos found.</em>">
+
+The `\context` pragma in this tiddler contains a pseudo-segment
+(e.g. `_latest`). Click to snapshot against its current resolution —
+the pragma text is rewritten to the concrete value, freezing the
+tiddler's references regardless of future version drift.
+
+<$button>Pin now
+<$action-setfield text=<<pinned-text>>/>
+</$button>
+
+</$list>
+</$let>

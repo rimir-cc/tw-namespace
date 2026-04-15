@@ -1,0 +1,55 @@
+title: $:/plugins/rimir/namespace/settings
+caption: settings
+
+\whitespace trim
+
+! Namespace — settings & diagnostics
+
+Read-only view of what the resolver currently sees: pseudo-segments,
+aliases, mount points, and the backlinks index. Click through to the
+defining tiddler for each.
+
+!! Pseudo-segments
+
+Modules registered as `module-type: rimir-ns-pseudo`. Each handles
+one `_foo` token encountered as a path segment.
+
+<$list filter="[all[tiddlers+shadows]is[system]prefix[$:/plugins/]] :filter[<currentTiddler>has[module-type]get[module-type]match[rimir-ns-pseudo]]" emptyMessage="<em>none registered</em>">
+* <$link to=<<currentTiddler>>/> — <code>{{{ [<currentTiddler>get[title]] }}}</code>
+</$list>
+
+!! Exact aliases
+
+Tiddlers tagged `$:/tags/NamespaceAlias` with `short` + `expands-to`.
+
+<$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespaceAlias]]" emptyMessage="<em>none defined</em>">
+* <code><$view field="short"/></code> → <code><$view field="expands-to"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
+</$list>
+
+!! Pattern aliases
+
+Tiddlers tagged `$:/tags/NamespacePatternAlias` with `pattern` + `replacement`.
+
+<$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespacePatternAlias]]" emptyMessage="<em>none defined</em>">
+* <code><$view field="pattern"/></code> → <code><$view field="replacement"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
+</$list>
+
+!! Mount points
+
+Tiddlers tagged `$:/tags/NamespaceMount` with `from` + `to`.
+
+<$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespaceMount]]" emptyMessage="<em>none defined</em>">
+* <code><$view field="from"/></code> → <code><$view field="to"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
+</$list>
+
+!! Diagnostic filters
+
+These operators are exposed for scripting / debugging:
+
+* `[<ref>ns-resolve<source>]` — resolve a single ref as if from `<source>`
+* `[<ref>ns-resolve-class<source>]` — CSS class (`ns-resolved` / `ns-unresolved`)
+* `[<title>ns-backlinks[]]` — sources that reference `<title>`
+* `[<title>ns-forwardlinks[]]` — targets `<title>` references
+
+Tiddler info sidebar includes a ''NS Backlinks'' tab showing the reverse
+index for the current tiddler.

@@ -202,14 +202,30 @@ fallback to the `context` field of `currentTiddler`. Because the
 `currentTiddler` is the rendering context, references resolve correctly
 under transclusion.
 
+!! Backlinks & tooling
+
+The plugin maintains its own backlinks index, built from a per-tiddler
+scan that resolves every reference with the source tiddler's context.
+Exposed as:
+
+* Filter operator `[<title>ns-backlinks[]]` — sources that reference
+  `<title>`.
+* Filter operator `[<title>ns-forwardlinks[]]` — targets referenced by
+  `<title>`.
+* ''NS'' tab in the tiddler info sidebar — lists both, plus a
+  ''Pin `_latest`'' button for tiddlers whose `\context` pragma contains
+  drifting pseudos.
+
+A ''settings'' plugin tab lists all registered pseudos, aliases, and
+mount points for diagnostics.
+
 !! Deferred
 
-Later stages will add:
-
-* Named aliases (and pattern aliases) for short cross-context shortcuts
-* Mount points / namespace root anchoring
-* Backlink indexer integration (so core search / relink see resolved targets)
-* Parallel treatment for transclusion {{{ {{…}} }}}
+* Namespace-aware transclusion `{{REF}}` — would require a full core
+  transcludeinline replacement to cover template / field / index forms.
+* Editor autocomplete for namespace-aware refs.
+* `relink`-plugin integration (renaming a walk-up target should
+  suggest targeted rewrites).
 
 !! Current limitations
 

@@ -23,6 +23,8 @@ Each page focuses on one feature. Click through:
   rewritten to longer paths, exact and pattern.
 # [[Mount points|$:/plugins/rimir/namespace/examples/mounts]] — logical
   prefix → physical prefix, for cleaner top-level names.
+# [[Backlinks & pin-latest|$:/plugins/rimir/namespace/examples/backlinks]] —
+  reverse index, filter operators, `NS` info tab, pin-`_latest` action.
 # [[Custom pseudo-segment|$:/plugins/rimir/namespace/examples/custom-pseudo]] —
   write your own `_foo`.
 
