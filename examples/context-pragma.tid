@@ -1,0 +1,38 @@
+title: $:/plugins/rimir/namespace/examples/context-pragma
+
+\context $:/plugins/rimir/namespace/examples/data/versions/4.0.3
+
+! `\context` pragma — declare once, resolve many
+
+A `\context <prefix>` pragma at the top of a tiddler's body sets
+`ns-context` for the entire tiddler. Bare-name references then try
+`<context>/REF` before falling back to walk-up.
+
+This tiddler declares:
+
+```
+\context $:/plugins/rimir/namespace/examples/data/versions/4.0.3
+```
+
+So every bare `[[REF]]` below resolves under that prefix first.
+
+!! Resolved via context
+
+* [[V3.3]] → `…/versions/4.0.3/V3.3`
+* [[V4.2]] → `…/versions/4.0.3/V4.2`
+
+!! Absolute references are unaffected
+
+* [[Older V3.3|$:/plugins/rimir/namespace/examples/data/versions/3.0/V3.3]]
+  — still the 3.0 variant.
+
+!! "Pin it"
+
+Swap the pragma prefix to `…/_latest` and the references drift with the
+newest version. Use a fixed version like the one above when you want
+stability; use `_latest` when you want recency.
+
+!! Unresolved
+
+* [[NotThere]] — no such tiddler at `.../4.0.3/NotThere` nor via
+  walk-up — rendered ⚠.

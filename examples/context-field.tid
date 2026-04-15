@@ -1,0 +1,35 @@
+context: $:/plugins/rimir/namespace/examples/data/versions/4.0.3
+title: $:/plugins/rimir/namespace/examples/context-field
+
+! `context:` field — declarative, whole-tiddler
+
+Set a `context` field on the tiddler (via the editor's field panel, an
+import, or just a field line in a `.tid` file). The filter operator
+reads it as a fallback when no widget variable is set.
+
+This tiddler has:
+
+```
+context: $:/plugins/rimir/namespace/examples/data/versions/4.0.3
+```
+
+!! Resolved via the field
+
+* [[V3.3]] → `…/versions/4.0.3/V3.3`
+* [[V4.2]] → `…/versions/4.0.3/V4.2`
+
+!! When to use
+
+The field form is right when:
+
+* You want the tiddler's context to //travel with it// — e.g. a template
+  you'll apply or export somewhere else.
+* You want it visible in the metadata pane, not buried in the body.
+* You want it editable like any other field — searchable, relinkable,
+  bulk-editable via typed forms.
+
+!! Widget / pragma override
+
+A `\context` pragma or an enclosing `<$context>` widget overrides the
+field. This makes the pragma/widget an effective "pin" that freezes a
+doc against a different context than the field says.

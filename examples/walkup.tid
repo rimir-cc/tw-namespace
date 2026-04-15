@@ -1,0 +1,39 @@
+title: $:/plugins/rimir/namespace/examples/walkup
+
+! Walk-up — relative references climb the title prefix
+
+When you write a bare reference `[[REF]]` (no slashes) inside a tiddler
+whose title already encodes hierarchy, the resolver walks up that title
+trying `<prefix>/REF` at each level until something exists.
+
+!! Example
+
+Open [[$:/plugins/rimir/namespace/examples/data/docs/intro]]. Its body
+contains a plain `[[api]]` link. When rendered, the resolver tries:
+
+# `$:/plugins/rimir/namespace/examples/data/docs/api` ← ''hit''
+# (would have tried `$:/plugins/rimir/namespace/examples/data/api` next)
+# `$:/plugins/rimir/namespace/examples/api`
+# … eventually `$:/plugins/api`, then just `api`
+
+The first hit wins, so the link resolves to the sibling `api` page
+without you ever writing a full path.
+
+!! Transcluded live
+
+<$transclude tiddler="$:/plugins/rimir/namespace/examples/data/docs/intro" mode="block"/>
+
+(the `[[api]]` and `[[architecture]]` links above are resolving via
+walk-up —  hover them to see the targets, click to navigate).
+
+!! Why this matters
+
+If you later move or rename the enclosing folder, the sibling relationships
+stay intact. References only need to be rewritten when //those// siblings
+move, not when the containing hierarchy is reorganised above.
+
+!! Intentionally unresolved
+
+In a tiddler titled `a/b/c/d/X`, a bare `[[NoSuchThing]]` walks up through
+five candidates. None match → the link renders with the `ns-unresolved`
+style (wavy underline + ⚠).

@@ -1,0 +1,35 @@
+title: $:/plugins/rimir/namespace/examples
+caption: examples
+
+! Live examples
+
+These pages ship with the plugin and use its own bundled data tiddlers
+as targets — so they work the moment you install the plugin, regardless
+of what else is in your wiki.
+
+Each page focuses on one feature. Click through:
+
+# [[Walk-up resolution|$:/plugins/rimir/namespace/examples/walkup]] — the
+  zero-config base case. Write `[[sibling]]` and let the resolver climb.
+# [[`_latest` pseudo-segment|$:/plugins/rimir/namespace/examples/latest]] —
+  version-max resolution; refs drift as new versions appear.
+# [[`\context` pragma|$:/plugins/rimir/namespace/examples/context-pragma]] —
+  declare a prefix once at the top of a tiddler.
+# [[`<$context>` widget|$:/plugins/rimir/namespace/examples/context-widget]] —
+  scope a context to part of a tiddler.
+# [[`context:` field|$:/plugins/rimir/namespace/examples/context-field]] —
+  declarative, tiddler-level.
+# [[Custom pseudo-segment|$:/plugins/rimir/namespace/examples/custom-pseudo]] —
+  write your own `_foo`.
+
+! The data used by these examples
+
+Under `$:/plugins/rimir/namespace/examples/data/`:
+
+* `versions/3.0/V3.3`
+* `versions/3.0.1/V3.3`
+* `versions/4.0.3/V3.3`, `versions/4.0.3/V4.2`, `versions/4.0.3` (index)
+* `docs/intro`, `docs/api`, `docs/architecture`
+
+Open any of these and browse around — they're small, wired to the
+examples, and demonstrate the resolver in its natural habitat.

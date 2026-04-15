@@ -1,0 +1,9 @@
+title: $:/plugins/rimir/namespace/examples/data/docs/intro
+
+! Intro
+
+This is the intro page for the //docs// example. It links to the
+sibling [[api]] page by bare name — the resolver walks up this
+tiddler's title prefix and finds `.../docs/api` there.
+
+Also see: [[architecture]].

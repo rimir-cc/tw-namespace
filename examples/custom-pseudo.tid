@@ -1,0 +1,68 @@
+title: $:/plugins/rimir/namespace/examples/custom-pseudo
+
+! Writing your own pseudo-segment
+
+Pseudo-segments are pluggable via the `rimir-ns-pseudo` module type.
+`_latest` is one such module; you can ship more alongside or in a
+dependent plugin.
+
+!! Minimal example — `_first`
+
+Save this as `$:/plugins/yourspace/yourname/pseudo/_first.js`:
+
+```
+/*\
+title: $:/plugins/yourspace/yourname/pseudo/_first.js
+type: application/javascript
+module-type: rimir-ns-pseudo
+\*/
+
+var util = require("$:/plugins/rimir/namespace/resolver.js");
+
+exports.name = "_first";
+
+exports.resolve = function(prefix, wiki) {
+    if(!prefix) { return null; }
+    var kids = util.listImmediateChildren(prefix, wiki);
+    kids.sort();
+    return kids.length ? kids[0] : null;
+};
+```
+
+After a server restart, `[[docs/_first/intro]]` from any source
+resolves to the alphabetically-first immediate child under `docs/`,
+then looks up `intro` underneath it.
+
+!! Contract
+
+* `exports.name` — the //full// segment string, including the leading
+  underscore. This is the pseudo-name the user types in their ref.
+* `exports.resolve(prefix, wiki)` — `prefix` is the `/`-joined segments
+  before the pseudo (empty string if pseudo is at position 0). Return:
+** a non-empty replacement segment (string) on success, or
+** `null` to fail expansion (the whole reference becomes unresolved).
+
+!! What the framework does for you
+
+* Discovery — any module-type `rimir-ns-pseudo` is picked up at startup.
+* Caching — results are cached per `(pseudoName, prefix, wiki)`. You
+  don't implement caching.
+* Invalidation — change events on any tiddler touching a cached prefix
+  drop that prefix's entries. You don't implement invalidation either.
+
+!! Utilities from `resolver.js`
+
+* `listImmediateChildren(prefix, wiki)` — set of direct child segments
+  under `<prefix>/`, across regular and shadow tiddlers. Most pseudos
+  just filter/sort this list and pick one.
+* `splitPath(title)` — splits a title into segments, treating `$:/…`
+  titles with `$:` as the root segment.
+
+!! Ideas to try
+
+* `_oldest` — version-min (copy `_latest`, flip the sort).
+* `_random` — pick a random child. Fun, but cache eats the randomness —
+  useful only if the page is re-rendered fresh each time.
+* `_today` — ignore prefix, return today's date. Useful as a segment
+  like `diaries/_today/entry`.
+* `_stable` — version-max that skips prereleases.

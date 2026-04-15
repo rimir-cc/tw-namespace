@@ -1,0 +1,51 @@
+title: $:/plugins/rimir/namespace/examples/context-widget
+
+! `<$context>` widget — scoped context
+
+Use `<$context prefix="X">…</$context>` to set a context for a //region//
+of a tiddler rather than the whole thing. Outside the region, normal
+walk-up resumes.
+
+!! Example
+
+Before any widget — walk-up only (nothing matches from //this// tiddler):
+
+* [[V3.3]] — ⚠ unresolved
+
+Scoped to version ''3.0'':
+
+<$context prefix="$:/plugins/rimir/namespace/examples/data/versions/3.0">
+* [[V3.3]] — resolves to `3.0/V3.3`
+</$context>
+
+Scoped to version ''4.0.3'':
+
+<$context prefix="$:/plugins/rimir/namespace/examples/data/versions/4.0.3">
+* [[V3.3]] — resolves to `4.0.3/V3.3`
+* [[V4.2]] — resolves to `4.0.3/V4.2`
+</$context>
+
+After the widgets — no context again:
+
+* [[V3.3]] — ⚠ unresolved
+
+!! Nesting
+
+Widgets stack the usual way: an inner `<$context>` overrides the outer
+one for its region.
+
+<$context prefix="$:/plugins/rimir/namespace/examples/data/versions/3.0">
+- outer is 3.0: [[V3.3]] → `3.0/V3.3`
+
+<$context prefix="$:/plugins/rimir/namespace/examples/data/versions/4.0.3">
+- inner is 4.0.3: [[V3.3]] → `4.0.3/V3.3`
+</$context>
+
+- back to outer 3.0: [[V3.3]] → `3.0/V3.3`
+</$context>
+
+!! When to use
+
+The widget is the right tool when //one// tiddler talks about two or more
+contexts side-by-side — a comparison doc, a changelog spanning versions,
+a tutorial that demonstrates multiple resolutions.

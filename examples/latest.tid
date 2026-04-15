@@ -1,0 +1,48 @@
+title: $:/plugins/rimir/namespace/examples/latest
+
+! `_latest` — version-max resolution
+
+Any segment equal to `_latest` is replaced with the highest-version
+immediate child of the preceding prefix. A "version" is plain
+dotted-numeric with an optional `-prerelease`.
+
+!! Example data
+
+Under `$:/plugins/rimir/namespace/examples/data/versions/`:
+
+* `3.0/V3.3`
+* `3.0.1/V3.3`
+* `4.0.3/V3.3`
+* `4.0.3/V4.2` — only in 4.0.3, not in older versions
+
+The highest-version child of `…/examples/data/versions/` is `4.0.3`.
+
+!! References
+
+* [[ns-examples latest/V3.3|$:/plugins/rimir/namespace/examples/data/versions/_latest/V3.3]]
+  → resolves to `.../4.0.3/V3.3`
+* [[ns-examples latest/V4.2|$:/plugins/rimir/namespace/examples/data/versions/_latest/V4.2]]
+  → resolves to `.../4.0.3/V4.2`
+* [[ns-examples latest index|$:/plugins/rimir/namespace/examples/data/versions/_latest]]
+  → resolves to `.../4.0.3` (the index tiddler)
+
+!! Fixed-version references still work, of course
+
+* [[3.0 V3.3|$:/plugins/rimir/namespace/examples/data/versions/3.0/V3.3]]
+* [[3.0.1 V3.3|$:/plugins/rimir/namespace/examples/data/versions/3.0.1/V3.3]]
+* [[4.0.3 V3.3|$:/plugins/rimir/namespace/examples/data/versions/4.0.3/V3.3]]
+
+!! Drift
+
+If you create a `5.0` directory in your own wiki with a tiddler
+titled `$:/plugins/rimir/namespace/examples/data/versions/5.0/V3.3`,
+the first link above will flip to resolving against `5.0` — without
+any reload or cache bust. (Try it from the `$:/ControlPanel` tiddlers
+panel if curious.)
+
+!! Unresolved
+
+* [[missing leaf|$:/plugins/rimir/namespace/examples/data/versions/_latest/NotThere]]
+  — `_latest` expands fine; the leaf doesn't exist → unresolved (⚠).
+* [[no version children|$:/plugins/rimir/namespace/examples/data/docs/_latest/X]]
+  — no version-shaped children under `.../docs/` → `_latest` can't expand → unresolved.

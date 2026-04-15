@@ -4,7 +4,11 @@ title: $:/plugins/rimir/namespace/readme
 
 Namespace-aware link resolution for TiddlyWiki. Replaces the core
 {{{ [[…]] }}} parser rule so link targets are resolved relative to the
-source tiddler's own title prefix.
+source tiddler's own title prefix — with declarative overrides and
+pluggable pseudo-segments.
+
+→ ''See the [[examples tab|$:/plugins/rimir/namespace/examples]]''
+for live, in-plugin demos of every feature described below.
 
 !! Resolution pipeline
 
@@ -14,16 +18,53 @@ A link {{{ [[REF]] }}} is resolved in this order:
   is looked up in the pseudo-segment registry. A matching resolver is
   called with the preceding prefix and returns the replacement segment
   (or null to fail expansion). Unknown `_`-prefixed segments pass through
-  as literal — so you can still have tiddlers legitimately named `_X`.
+  as literal.
 # ''Literal'' — if the (expanded) `REF` is an exact tiddler title, use it.
-  ''~$:/…'' system links and shadow tiddlers match here.
+  `~$:/…` system links and shadow tiddlers match here.
 # ''Absolute'' — if `REF` contains a slash, it is treated as a full title
-  (no walk-up).
+  (no walk-up, no context prefix).
+# ''Context prefix'' — if a context is declared (see below), try
+  `<context>/REF`. Pseudo-segments inside the context are also expanded,
+  so `\context OWASP/ASVS/_latest` drifts with the newest version.
 # ''Walk-up'' — walk up the source tiddler's title prefix:
   from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
 # ''Unresolved'' — rendered with the `ns-unresolved` class
   (wavy underline + ⚠ marker) and a tooltip listing the candidates tried.
+
+!! Declaring a context
+
+Three equivalent mechanisms — pick whichever fits:
+
+* ''Pragma at the top of a tiddler:''
+
+```
+\context OWASP/ASVS/4.0.3
+
+now [[V3.3]] resolves to OWASP/ASVS/4.0.3/V3.3
+```
+
+* ''Widget for a scoped region:''
+
+```
+<$context prefix="OWASP/ASVS/4.0.3">
+  [[V3.3]] resolves here
+</$context>
+regular rendering resumes outside
+```
+
+* ''Field on the tiddler'' — declarative, persistent:
+
+```
+title: my-notes
+context: OWASP/ASVS/4.0.3
+...
+```
+
+Priority: widget variable (from pragma or `<$context>`) wins over field.
+That makes `\context` an effective "pin" — dropping `\context OWASP/ASVS/4.0.3`
+at the top of a doc overrides any field-based context and freezes the
+doc's resolutions against version 4.0.3.
 
 !! Built-in pseudo-segments
 
@@ -36,14 +77,20 @@ A link {{{ [[REF]] }}} is resolved in this order:
 
 ''Walk-up from a deep title.'' A tiddler titled
 `a/b/OWASP/ASVS/4.0.3/docs/intro` can write {{{ [[V3.3]] }}} and it
-resolves to `a/b/OWASP/ASVS/4.0.3/V3.3` — the first ancestor prefix at
-which `V3.3` exists wins.
+resolves to `a/b/OWASP/ASVS/4.0.3/V3.3`.
 
 ''`_latest` at a fixed anchor.'' A reference
 {{{ [[OWASP/ASVS/_latest/V3.3]] }}} resolves to
 `OWASP/ASVS/4.0.3/V3.3` when `4.0.3` is the highest version child under
-`OWASP/ASVS/`. The moment `5.0` appears, the same reference starts
-resolving to `OWASP/ASVS/5.0/V3.3` — the link drifts with your latest.
+`OWASP/ASVS/`. Add `5.0` and the same reference re-points.
+
+''Context + bare ref.'' From any tiddler:
+
+```
+\context OWASP/ASVS/_latest
+[[V3.3]]   ← resolves via context → OWASP/ASVS/<max>/V3.3
+[[V4.2]]   ← same, but if missing in <max>, link is unresolved
+```
 
 !! Adding your own pseudo-segment
 
@@ -70,8 +117,7 @@ exports.resolve = function(prefix, wiki) {
 ```
 
 After a server restart, {{{ [[docs/_first/intro]] }}} from any source
-resolves to the alphabetically first immediate child under `docs/`,
-followed by `/intro`.
+resolves to the alphabetically first immediate child under `docs/`.
 
 ''The contract:''
 
@@ -79,21 +125,18 @@ followed by `/intro`.
   underscore. This is what appears in the user's reference.
 * `exports.resolve(prefix, wiki)` — `prefix` is the `/`-joined segments
   before the pseudo (empty string if pseudo is at position 0). Return
-  the replacement segment (a non-empty string) or `null` to fail
-  expansion. Return `null` on empty prefix if your resolver needs a
-  prefix (like `_latest` does).
+  the replacement segment (non-empty string) or `null` to fail
+  expansion.
 
 ''Utilities available from `resolver.js`:''
 
 * `listImmediateChildren(prefix, wiki)` — returns the set of immediate
   child segments under `<prefix>/`, across regular and shadow tiddlers.
-  Most pseudo-resolvers just filter+sort this list and pick one.
 * `splitPath(title)` — splits a title into path segments, treating
   `$:/…` titles as a single segment.
 
 Results are cached per `(pseudoName, prefix, wiki)` triple; the cache is
-invalidated on wiki change events whose title touches the prefix. You
-don't need to implement caching inside your resolver.
+invalidated on wiki change events whose title touches the prefix.
 
 !! How link rendering works
 
@@ -109,14 +152,15 @@ The wikirule converts {{{ [[REF]] }}} into:
 ```
 
 Resolution happens at render time via the `ns-resolve` filter operator,
-so references resolve correctly under transclusion (they follow the
-widget's `currentTiddler`, not the source tiddler of the text).
+which reads the `ns-context` variable (set by pragma or widget) with
+fallback to the `context` field of `currentTiddler`. Because the
+`currentTiddler` is the rendering context, references resolve correctly
+under transclusion.
 
 !! Deferred
 
 Later stages will add:
 
-* `\context` pragma, `<$context>` widget, and `context:` field overrides
 * Named aliases (and pattern aliases) for short cross-context shortcuts
 * Mount points / namespace root anchoring
 * Backlink indexer integration (so core search / relink see resolved targets)
@@ -126,10 +170,10 @@ Later stages will add:
 
 * Core TiddlyWiki's backlink index and the `relink` plugin only see the
   literal `[[REF]]` string, not the resolved target. Backlinks from
-  walk-up or pseudo-segment references are therefore missing until a
-  later stage ships an indexer.
-* Pseudo-segments only expand in absolute references (those containing
-  `/`), or at position 0 of a bare reference (which typically won't
-  resolve since there is no prefix). To get "latest in my context" from
-  a relative reference, you'll need the `\context` pragma landing later.
+  walk-up, context, or pseudo-segment references are therefore missing
+  until a later stage ships an indexer.
+* When a tiddler with a `context:` field is transcluded from a scope
+  that set `ns-context` (via pragma or widget), the outer scope wins.
+  Workaround: add `\context <same-value>` at the top of the inner
+  tiddler if you need it to "own" its context regardless.
 * No configuration UI yet.

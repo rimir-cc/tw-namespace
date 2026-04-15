@@ -1,0 +1,6 @@
+title: $:/plugins/rimir/namespace/examples/data/docs/architecture
+
+! Architecture
+
+Reached from [[intro]] via walk-up. From //this// page, links like
+[[api]] and [[intro]] also walk up to the adjacent pages.

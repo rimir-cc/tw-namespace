@@ -16,9 +16,13 @@ Resolution pipeline for a reference REF looked up from source tiddler SRC:
   1. Literal        — expanded REF exists as-is (covers $:/… system titles).
   2. Absolute       — REF contains '/', looked up literally (same as #1
                       in current stages; meaningful once mount points land).
-  3. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
+  3. Context prefix — if options.context is set (from \context pragma,
+                      <$context> widget, or context field), try
+                      "<context>/REF" before walk-up. Lets a tiddler
+                      declare "resolve as if I lived under this prefix".
+  4. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
                       and try "<prefix>/REF" at each depth. First hit wins.
-  4. Unresolved     — no candidate matched.
+  5. Unresolved     — no candidate matched.
 
 Pseudo-segments are pluggable: each resolver is its own JS module with
 module-type `rimir-ns-pseudo`, exporting `name` (the full segment string
@@ -36,13 +40,18 @@ and drops matching cache entries.
 /* ---------- path helpers ---------- */
 
 /*
-Split a tiddler title into path segments on '/'. Titles starting with '$:/'
-return a single segment for the whole title — we never walk up into the
-system namespace.
+Split a tiddler title into path segments on '/'. System titles ('$:/…')
+keep "$:" as the first segment so walk-up can traverse within the system
+namespace — enabling shadow-tiddler demos and plugin-internal links.
+Walk-up stops at i>=2 for $:/ titles to avoid degenerate "$:/REF"
+candidates that would match nothing useful.
 */
 exports.splitPath = function(title) {
 	if(!title) { return []; }
-	if(title.indexOf("$:/") === 0) { return [title]; }
+	if(title.indexOf("$:/") === 0) {
+		var rest = title.substring(3);
+		return rest ? ["$:"].concat(rest.split("/")) : ["$:"];
+	}
 	return title.split("/");
 };
 
@@ -202,13 +211,17 @@ ref:         the raw link target as the user typed it (e.g. "V3.3",
              "OWASP/ASVS/_latest/V3.3")
 sourceTitle: title of the tiddler being rendered
 wiki:        $tw.wiki (needs tiddlerExists, isShadowTiddler, each, eachShadow)
+options:     optional; {context: "<prefix>"} to supply a declared context
+             that shadows walk-up. Pseudo-segments in the context prefix
+             are expanded before use.
 
 Returns: {status, resolved, tried}
-  status:   "literal" | "absolute" | "walkup" | "unresolved"
+  status:   "literal" | "absolute" | "context" | "walkup" | "unresolved"
   resolved: resolved title or null
   tried:    ordered array of every title we checked (useful for tooltips)
 */
-exports.resolve = function(ref, sourceTitle, wiki) {
+exports.resolve = function(ref, sourceTitle, wiki, options) {
+	options = options || {};
 	var tried = [];
 	if(!ref) {
 		return {status: "unresolved", resolved: null, tried: tried};
@@ -229,17 +242,33 @@ exports.resolve = function(ref, sourceTitle, wiki) {
 	if(expanded.indexOf("/") !== -1) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// System-namespace refs never walk up.
+	// System-namespace refs never walk up or use context.
 	if(expanded.indexOf("$:/") === 0) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 3. Walk-up from the source tiddler's prefix.
+	// 3. Context prefix — try "<context>/REF" when a declared context is
+	//    present. Pseudo-segments in the context string expand too, so
+	//    e.g. `\context OWASP/ASVS/_latest` drifts with the newest version.
+	if(options.context) {
+		var ctx = exports.expandPseudoSegments(options.context, wiki);
+		if(ctx !== null && ctx !== "") {
+			var ctxCandidate = ctx + "/" + expanded;
+			tried.push(ctxCandidate);
+			if(exists(wiki, ctxCandidate)) {
+				return {status: "context", resolved: ctxCandidate, tried: tried};
+			}
+		}
+	}
+	// 4. Walk-up from the source tiddler's prefix.
 	if(sourceTitle) {
 		var segs = exports.splitPath(sourceTitle);
-		// Start from parent of source (i = segs.length - 1 drops SRC's own
-		// last segment) and walk up to i = 1 (deepest prefix with at least
-		// one segment). i = 0 is the bare ref, already tried as literal.
-		for(var i = segs.length - 1; i >= 1; i--) {
+		// For $:/ titles the first segment is the "$:" marker; stop at i=2
+		// so the shallowest prefix is "$:/<first-real-seg>" rather than
+		// a bare "$:/REF".
+		var minI = (segs[0] === "$:") ? 2 : 1;
+		// Walk up to minI (inclusive). i = 0 would be the bare ref, already
+		// tried as literal.
+		for(var i = segs.length - 1; i >= minI; i--) {
 			var candidate = segs.slice(0, i).join("/") + "/" + expanded;
 			tried.push(candidate);
 			if(exists(wiki, candidate)) {

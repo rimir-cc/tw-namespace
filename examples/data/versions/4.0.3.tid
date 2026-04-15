@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/namespace/examples/data/versions/4.0.3
+
+Index page for version ''4.0.3''. Exists so {{{ [[…/_latest]] }}}
+(with no trailing segment) can resolve to something real.
