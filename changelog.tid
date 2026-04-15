@@ -1,4 +1,5 @@
 title: $:/plugins/rimir/namespace/changelog
 
 |!Version |!Date |!Changes |
+|0.1.1 |2026-04-15 |Stage 2: pluggable pseudo-segment framework (module-type `rimir-ns-pseudo`); ships `_latest` (version-max). Per-(pseudo,prefix) cache with targeted invalidation on wiki change. |
 |0.1.0 |2026-04-15 |Initial stage 1: walk-up resolver, replacement prettylink rule, unresolved styling. |

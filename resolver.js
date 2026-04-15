@@ -5,22 +5,35 @@ module-type: library
 
 Pure resolver for namespace-aware link references.
 
-Resolution order for a reference REF looked up from source tiddler SRC:
+Resolution pipeline for a reference REF looked up from source tiddler SRC:
 
-  1. Literal     — REF exists as-is (covers $:/… system titles).
-  2. Absolute    — REF contains '/', looked up literally (identical to #1
-                   in stage 1; becomes meaningful once mount points land).
-  3. Walk-up     — walk prefixes of SRC (excluding SRC's own last segment)
-                   and try "<prefix>/REF" at each depth. First hit wins.
-  4. Unresolved  — no candidate matched.
+  0. Expand pseudo-segments — any segment beginning with "_" is looked up
+                      in the pseudo-registry (module-type:
+                      rimir-ns-pseudo). Matching resolvers are called with
+                      (prefix, wiki) and return a replacement segment, or
+                      null to fail expansion. Unknown _-prefixed segments
+                      pass through unchanged (treated as literal).
+  1. Literal        — expanded REF exists as-is (covers $:/… system titles).
+  2. Absolute       — REF contains '/', looked up literally (same as #1
+                      in current stages; meaningful once mount points land).
+  3. Walk-up        — walk prefixes of SRC (excluding SRC's own last segment)
+                      and try "<prefix>/REF" at each depth. First hit wins.
+  4. Unresolved     — no candidate matched.
 
-No caching in stage 1 — wiki.tiddlerExists is already O(1) and walk depth
-is small. Resolution is invoked at render time (via the ns-resolve filter
-operator), so the source tiddler comes from the widget's currentTiddler.
+Pseudo-segments are pluggable: each resolver is its own JS module with
+module-type `rimir-ns-pseudo`, exporting `name` (the full segment string
+including leading underscore) and `resolve(prefix, wiki)`. See
+`pseudo/_latest.js` for the reference implementation.
+
+Pseudo lookups are cached per-wiki, keyed by (pseudoName, prefix). The
+companion startup module walks every changed title's ancestor prefixes
+and drops matching cache entries.
 
 \*/
 
 "use strict";
+
+/* ---------- path helpers ---------- */
 
 /*
 Split a tiddler title into path segments on '/'. Titles starting with '$:/'
@@ -42,13 +55,153 @@ function exists(wiki, title) {
 	return wiki.tiddlerExists(title) || (wiki.isShadowTiddler && wiki.isShadowTiddler(title));
 }
 
+/* ---------- utility for pseudo-resolvers ---------- */
+
+/*
+Return the set of immediate child segments under a given prefix, across
+both regular and shadow tiddlers. Empty-string segments (trailing slashes)
+are dropped.
+
+This is the one enumeration primitive pseudo-resolvers should need: give
+me what's directly below `<prefix>/`, filter/sort it however you like,
+return one segment.
+*/
+exports.listImmediateChildren = function(prefix, wiki) {
+	var children = Object.create(null),
+		pfx = prefix + "/";
+	function collect(tiddler, title) {
+		if(title.indexOf(pfx) !== 0) { return; }
+		var rest = title.substring(pfx.length),
+			slashAt = rest.indexOf("/"),
+			seg = slashAt === -1 ? rest : rest.substring(0, slashAt);
+		if(seg) { children[seg] = true; }
+	}
+	if(wiki.each) { wiki.each(collect); }
+	if(wiki.eachShadow) { wiki.eachShadow(collect); }
+	return Object.keys(children);
+};
+
+/* ---------- pseudo-segment registry ---------- */
+
+// Cached registry map: pseudoName → resolve(prefix, wiki)
+var registry = null;
+
+function getRegistry() {
+	if(registry !== null) { return registry; }
+	registry = Object.create(null);
+	if($tw && $tw.modules && $tw.modules.getModulesByTypeAsHashmap) {
+		var mods = $tw.modules.getModulesByTypeAsHashmap("rimir-ns-pseudo");
+		for(var key in mods) {
+			var mod = mods[key];
+			if(mod && typeof mod.name === "string" && typeof mod.resolve === "function") {
+				registry[mod.name] = mod.resolve;
+			}
+		}
+	}
+	return registry;
+}
+
+/*
+Reset the registry. Useful if pseudo modules are added/removed at runtime
+(rare — mostly for tests). Normal operation builds the registry once at
+first use and keeps it.
+*/
+exports.resetPseudoRegistry = function() {
+	registry = null;
+};
+
+/* ---------- pseudo result cache ---------- */
+
+// WeakMap<wiki, Map<"<pseudoName>\x1f<prefix>", string|null>>
+var caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+var CACHE_SEP = "\x1f";
+
+function getCache(wiki) {
+	if(!caches) { return null; }
+	var c = caches.get(wiki);
+	if(!c) {
+		c = new Map();
+		caches.set(wiki, c);
+	}
+	return c;
+}
+
+function cacheKey(pseudoName, prefix) {
+	return pseudoName + CACHE_SEP + prefix;
+}
+
+/*
+Drop cached pseudo results. If `prefix` is null/empty, clear all entries
+for this wiki; otherwise drop every entry whose prefix part matches
+exactly, across all pseudo names.
+*/
+exports.invalidatePseudoCache = function(prefix, wiki) {
+	var cache = getCache(wiki);
+	if(!cache) { return; }
+	if(!prefix) {
+		cache.clear();
+		return;
+	}
+	var toDelete = [];
+	cache.forEach(function(_value, key) {
+		var sep = key.indexOf(CACHE_SEP);
+		if(sep !== -1 && key.substring(sep + 1) === prefix) {
+			toDelete.push(key);
+		}
+	});
+	for(var i = 0; i < toDelete.length; i++) { cache.delete(toDelete[i]); }
+};
+
+function resolvePseudo(pseudoName, prefix, wiki) {
+	var cache = getCache(wiki),
+		key = cacheKey(pseudoName, prefix);
+	if(cache && cache.has(key)) { return cache.get(key); }
+	var fn = getRegistry()[pseudoName];
+	if(!fn) { return undefined; }  // not a known pseudo — let caller leave segment as literal
+	var result;
+	try {
+		result = fn(prefix, wiki);
+	} catch(e) {
+		console.error("namespace pseudo '" + pseudoName + "' threw:", e);
+		result = null;
+	}
+	if(typeof result !== "string") { result = null; }
+	if(cache) { cache.set(key, result); }
+	return result;
+}
+
+/*
+Expand every pseudo-segment (any segment starting with "_") in the ref
+against its preceding prefix. Returns the expanded ref, or null if any
+pseudo resolver returned null. Unknown _-prefixed segments are left
+untouched (treated as literal — lets users have tiddlers legitimately
+named `_something` without triggering the pipeline).
+*/
+exports.expandPseudoSegments = function(ref, wiki) {
+	if(ref.indexOf("_") === -1) { return ref; }
+	var segs = ref.split("/"),
+		changed = false;
+	for(var i = 0; i < segs.length; i++) {
+		if(segs[i].charAt(0) !== "_") { continue; }
+		var prefix = segs.slice(0, i).join("/"),
+			replacement = resolvePseudo(segs[i], prefix, wiki);
+		if(replacement === undefined) { continue; }  // unknown pseudo — leave as literal
+		if(replacement === null) { return null; }    // known pseudo, couldn't resolve
+		segs[i] = replacement;
+		changed = true;
+	}
+	return changed ? segs.join("/") : ref;
+};
+
+/* ---------- main resolver ---------- */
+
 /*
 Resolve a reference.
 
-ref:         the raw link target as the user typed it (e.g. "V3.3")
+ref:         the raw link target as the user typed it (e.g. "V3.3",
+             "OWASP/ASVS/_latest/V3.3")
 sourceTitle: title of the tiddler being rendered
-wiki:        object with tiddlerExists(title) and isShadowTiddler(title)
-             (pass $tw.wiki)
+wiki:        $tw.wiki (needs tiddlerExists, isShadowTiddler, each, eachShadow)
 
 Returns: {status, resolved, tried}
   status:   "literal" | "absolute" | "walkup" | "unresolved"
@@ -60,19 +213,24 @@ exports.resolve = function(ref, sourceTitle, wiki) {
 	if(!ref) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
+	// 0. Expand pseudo-segments, if any.
+	var expanded = exports.expandPseudoSegments(ref, wiki);
+	if(expanded === null) {
+		return {status: "unresolved", resolved: null, tried: [ref]};
+	}
 	// 1. Literal — always try first so $:/… and exact-title refs win.
-	tried.push(ref);
-	if(exists(wiki, ref)) {
-		return {status: "literal", resolved: ref, tried: tried};
+	tried.push(expanded);
+	if(exists(wiki, expanded)) {
+		return {status: "literal", resolved: expanded, tried: tried};
 	}
 	// 2. Absolute (ref contains '/'): stop after the literal check — don't
-	//    walk up. In stage 1 this branch is identical to #1; it becomes
-	//    meaningful once mount points prepend a root prefix.
-	if(ref.indexOf("/") !== -1) {
+	//    walk up. In current stages this branch is identical to #1; it
+	//    becomes meaningful once mount points prepend a root prefix.
+	if(expanded.indexOf("/") !== -1) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
 	// System-namespace refs never walk up.
-	if(ref.indexOf("$:/") === 0) {
+	if(expanded.indexOf("$:/") === 0) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
 	// 3. Walk-up from the source tiddler's prefix.
@@ -82,7 +240,7 @@ exports.resolve = function(ref, sourceTitle, wiki) {
 		// last segment) and walk up to i = 1 (deepest prefix with at least
 		// one segment). i = 0 is the bare ref, already tried as literal.
 		for(var i = segs.length - 1; i >= 1; i--) {
-			var candidate = segs.slice(0, i).join("/") + "/" + ref;
+			var candidate = segs.slice(0, i).join("/") + "/" + expanded;
 			tried.push(candidate);
 			if(exists(wiki, candidate)) {
 				return {status: "walkup", resolved: candidate, tried: tried};

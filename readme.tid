@@ -6,24 +6,96 @@ Namespace-aware link resolution for TiddlyWiki. Replaces the core
 {{{ [[…]] }}} parser rule so link targets are resolved relative to the
 source tiddler's own title prefix.
 
-!! What it does (stage 1)
+!! Resolution pipeline
 
 A link {{{ [[REF]] }}} is resolved in this order:
 
-# ''Literal'' — if a tiddler titled exactly `REF` exists, use it.
-  ''~$:/…'' system links always match here.
-# ''Absolute'' — if `REF` contains a slash, it is treated as a full title.
+# ''Pseudo-segment expansion'' — any segment of `REF` starting with `_`
+  is looked up in the pseudo-segment registry. A matching resolver is
+  called with the preceding prefix and returns the replacement segment
+  (or null to fail expansion). Unknown `_`-prefixed segments pass through
+  as literal — so you can still have tiddlers legitimately named `_X`.
+# ''Literal'' — if the (expanded) `REF` is an exact tiddler title, use it.
+  ''~$:/…'' system links and shadow tiddlers match here.
+# ''Absolute'' — if `REF` contains a slash, it is treated as a full title
+  (no walk-up).
 # ''Walk-up'' — walk up the source tiddler's title prefix:
   from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
 # ''Unresolved'' — rendered with the `ns-unresolved` class
   (wavy underline + ⚠ marker) and a tooltip listing the candidates tried.
 
-Example: a tiddler titled `a/b/OWASP/ASVS/4.0.3/docs/intro` can simply
-write {{{ [[V3.3]] }}} to refer to `a/b/OWASP/ASVS/4.0.3/V3.3` — no
-need to spell out the full path.
+!! Built-in pseudo-segments
 
-!! How it works
+* ''`_latest`'' — resolves to the highest-version immediate child of its
+  prefix. A "version" is plain dotted-numeric with optional `-prerelease`
+  (`1`, `3.0`, `4.0.3`, `1.0-beta`, `2.0.0-rc.1`). Comparison is numeric
+  per segment, with releases sorting above their prereleases.
+
+!! Examples
+
+''Walk-up from a deep title.'' A tiddler titled
+`a/b/OWASP/ASVS/4.0.3/docs/intro` can write {{{ [[V3.3]] }}} and it
+resolves to `a/b/OWASP/ASVS/4.0.3/V3.3` — the first ancestor prefix at
+which `V3.3` exists wins.
+
+''`_latest` at a fixed anchor.'' A reference
+{{{ [[OWASP/ASVS/_latest/V3.3]] }}} resolves to
+`OWASP/ASVS/4.0.3/V3.3` when `4.0.3` is the highest version child under
+`OWASP/ASVS/`. The moment `5.0` appears, the same reference starts
+resolving to `OWASP/ASVS/5.0/V3.3` — the link drifts with your latest.
+
+!! Adding your own pseudo-segment
+
+Pseudo-segments are pluggable. Drop a JS module alongside or in a
+dependent plugin, declaring `module-type: rimir-ns-pseudo`:
+
+```
+/*\
+title: $:/plugins/yourspace/yourname/pseudo/_first.js
+type: application/javascript
+module-type: rimir-ns-pseudo
+\*/
+
+var util = require("$:/plugins/rimir/namespace/resolver.js");
+
+exports.name = "_first";
+
+exports.resolve = function(prefix, wiki) {
+    if(!prefix) { return null; }
+    var kids = util.listImmediateChildren(prefix, wiki);
+    kids.sort();
+    return kids.length ? kids[0] : null;
+};
+```
+
+After a server restart, {{{ [[docs/_first/intro]] }}} from any source
+resolves to the alphabetically first immediate child under `docs/`,
+followed by `/intro`.
+
+''The contract:''
+
+* `exports.name` — the full segment string, //including// the leading
+  underscore. This is what appears in the user's reference.
+* `exports.resolve(prefix, wiki)` — `prefix` is the `/`-joined segments
+  before the pseudo (empty string if pseudo is at position 0). Return
+  the replacement segment (a non-empty string) or `null` to fail
+  expansion. Return `null` on empty prefix if your resolver needs a
+  prefix (like `_latest` does).
+
+''Utilities available from `resolver.js`:''
+
+* `listImmediateChildren(prefix, wiki)` — returns the set of immediate
+  child segments under `<prefix>/`, across regular and shadow tiddlers.
+  Most pseudo-resolvers just filter+sort this list and pick one.
+* `splitPath(title)` — splits a title into path segments, treating
+  `$:/…` titles as a single segment.
+
+Results are cached per `(pseudoName, prefix, wiki)` triple; the cache is
+invalidated on wiki change events whose title touches the prefix. You
+don't need to implement caching inside your resolver.
+
+!! How link rendering works
 
 The wikirule converts {{{ [[REF]] }}} into:
 
@@ -37,23 +109,27 @@ The wikirule converts {{{ [[REF]] }}} into:
 ```
 
 Resolution happens at render time via the `ns-resolve` filter operator,
-so references still resolve correctly under transclusion (they follow
-the widget's `currentTiddler`, not the source tiddler of the text).
+so references resolve correctly under transclusion (they follow the
+widget's `currentTiddler`, not the source tiddler of the text).
 
 !! Deferred
 
 Later stages will add:
 
-* `_latest` pseudo-segment (version-max resolution)
 * `\context` pragma, `<$context>` widget, and `context:` field overrides
 * Named aliases (and pattern aliases) for short cross-context shortcuts
 * Mount points / namespace root anchoring
 * Backlink indexer integration (so core search / relink see resolved targets)
 * Parallel treatment for transclusion {{{ {{…}} }}}
 
-!! Limitations of stage 1
+!! Current limitations
 
 * Core TiddlyWiki's backlink index and the `relink` plugin only see the
   literal `[[REF]]` string, not the resolved target. Backlinks from
-  walk-up-resolved references are therefore missing until stage 6 lands.
+  walk-up or pseudo-segment references are therefore missing until a
+  later stage ships an indexer.
+* Pseudo-segments only expand in absolute references (those containing
+  `/`), or at position 0 of a bare reference (which typically won't
+  resolve since there is no prefix). To get "latest in my context" from
+  a relative reference, you'll need the `\context` pragma landing later.
 * No configuration UI yet.
