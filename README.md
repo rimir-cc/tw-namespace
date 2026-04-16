@@ -39,9 +39,14 @@ For a link `[[REF]]` rendered inside a tiddler:
 
 For walk-up resolution without explicit context, enable the **Walk-up** flag in plugin settings.
 
+## Relink integration
+
+With the [relink plugin](https://github.com/flibbles/tw5-relink) installed, renaming a tiddler automatically updates `\context` pragmas and `<$context prefix="...">` attributes that reference it. Combined with relink-titles, parent renames cascade to child tiddlers and their references.
+
 ## Prerequisites
 
 - TiddlyWiki 5.3.0+
+- Optional: [flibbles/relink](https://github.com/flibbles/tw5-relink) + relink-titles for automatic rename propagation
 
 ## License
 

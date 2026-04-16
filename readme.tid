@@ -241,13 +241,25 @@ Exposed as:
 A ''settings'' plugin tab lists all registered pseudos, aliases, and
 mount points for diagnostics.
 
+!! Relink integration
+
+When the [[relink plugin|https://github.com/flibbles/tw5-relink]] is
+installed, renaming a tiddler automatically updates:
+
+* `\context <prefix>` pragmas where the prefix matches the old title.
+* `<$context prefix="...">` widget attributes.
+
+Combined with the ''relink-titles'' companion plugin (which cascades
+renames to child tiddlers), renaming a parent like `OWASP/ASVS` to
+`OWASP/Standards` also updates `\context OWASP/ASVS/4.0.3` →
+`\context OWASP/Standards/4.0.3` (because relink-titles renames the
+child tiddler first, then relink updates the reference).
+
 !! Deferred
 
 * Namespace-aware transclusion `{{REF}}` — would require a full core
   transcludeinline replacement to cover template / field / index forms.
 * Editor autocomplete for namespace-aware refs.
-* `relink`-plugin integration (renaming a walk-up target should
-  suggest targeted rewrites).
 
 !! Current limitations
 
