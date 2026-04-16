@@ -15,8 +15,9 @@ acceptable for a backlinks view (extra edges never hurt lookup).
 
 Per-source context detection:
 
-  1. `\context <prefix>` pragma on the first non-blank body line.
-  2. `context` field on the source tiddler.
+  1. `\context <prefix>` pragma on the first non-blank body line (always).
+  2. `context` field on the source tiddler (only when the
+     "implicit-context" feature flag is enabled).
   3. No context.
 
 The `<$context>` widget's scoped context is //not// tracked — backlinks
@@ -33,6 +34,7 @@ cleanly on re-index.
 "use strict";
 
 var resolver = require("$:/plugins/rimir/namespace/resolver.js");
+var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 // Forward: sourceTitle → Set<targetTitle>
 // (so we can remove a source's old edges on re-index cleanly).
@@ -78,9 +80,12 @@ function extractRefs(text) {
 	return refs;
 }
 
-function detectContext(tiddler) {
+function detectContext(tiddler, wiki) {
 	if(!tiddler || !tiddler.fields) { return ""; }
-	if(tiddler.fields.context) { return tiddler.fields.context; }
+	// Field-based context gated by the "implicit-context" feature flag.
+	if(flags.isEnabled("implicit-context", wiki) && tiddler.fields.context) {
+		return tiddler.fields.context;
+	}
 	var text = tiddler.fields.text || "";
 	var m = text.match(RE_CONTEXT_PRAGMA);
 	return m ? m[1] : "";
@@ -103,7 +108,7 @@ function indexSource(title, wiki) {
 	if(!isIndexable(tiddler)) { return; }
 	var refs = extractRefs(tiddler.fields.text);
 	if(!refs.length) { return; }
-	var context = detectContext(tiddler),
+	var context = detectContext(tiddler, wiki),
 		opts = context ? {context: context} : undefined;
 	for(var i = 0; i < refs.length; i++) {
 		var r = resolver.resolve(refs[i], title, wiki, opts);

@@ -60,16 +60,21 @@ describe("namespace: ns-resolve filter operator", function() {
 
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js"),
 		mounts = require("$:/plugins/rimir/namespace/mounts.js"),
-		resolver = require("$:/plugins/rimir/namespace/resolver.js");
+		resolver = require("$:/plugins/rimir/namespace/resolver.js"),
+		flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
 		wiki.addTiddlers(tiddlers || []);
+		wiki.addTiddler({title: "$:/config/rimir/namespace/walk-up", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/aliases", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/implicit-context", text: "yes"});
 		wiki.addIndexersToWiki();
 		return wiki;
 	}
 
 	beforeEach(function() {
+		flags.invalidate();
 		resolver.invalidatePseudoCache();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();

@@ -18,12 +18,13 @@ Usage from wikitext:
 Both operators take the source tiddler title as their operand, so the caller
 passes <currentTiddler>. The input is the reference string.
 
-Context lookup (stage 3) — before calling the resolver we look up a
-declared "context prefix":
+Context lookup — before calling the resolver we look up a declared
+"context prefix":
 
   1. Widget variable `ns-context` (set by the <$context> widget or the
-     \context pragma).
-  2. Field `context` on the source tiddler (fallback).
+     \context pragma) — always active.
+  2. Field `context` on the source tiddler — only when the
+     "implicit-context" feature flag is enabled.
 
 The context is passed as options.context to the resolver. Widget variable
 wins over field so that nested <$context> widgets and \context pragmas
@@ -35,6 +36,7 @@ override the tiddler-level default.
 
 var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 var indexer = require("$:/plugins/rimir/namespace/indexer.js");
+var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 function getContext(sourceTitle, options) {
 	// Widget variable first (set by <$context> / \context pragma).
@@ -43,9 +45,12 @@ function getContext(sourceTitle, options) {
 		if(v) { return v; }
 	}
 	// Fallback: context field on the source tiddler.
-	if(sourceTitle && options.wiki) {
-		var t = options.wiki.getTiddler(sourceTitle);
-		if(t && t.fields && t.fields.context) { return t.fields.context; }
+	// Gated by the "implicit-context" feature flag.
+	if(flags.isEnabled("implicit-context", options.wiki)) {
+		if(sourceTitle && options.wiki) {
+			var t = options.wiki.getTiddler(sourceTitle);
+			if(t && t.fields && t.fields.context) { return t.fields.context; }
+		}
 	}
 	return "";
 }

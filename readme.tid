@@ -7,41 +7,63 @@ Namespace-aware link resolution for TiddlyWiki. Replaces the core
 source tiddler's own title prefix — with declarative overrides and
 pluggable pseudo-segments.
 
+The plugin is ''explicit-first'': advanced features (walk-up, aliases,
+pseudo-expansion, implicit context) are all off by default and can be
+toggled individually in the [[settings tab|$:/plugins/rimir/namespace/settings]].
+The core mechanism — literal match + `\context` pragma / `<$context>` widget +
+mount points — is always active.
+
 → ''See the [[examples tab|$:/plugins/rimir/namespace/examples]]''
 for live, in-plugin demos of every feature described below.
 
 !! Resolution pipeline
 
-A link {{{ [[REF]] }}} is resolved in this order:
+A link {{{ [[REF]] }}} is resolved in this order. Stages marked ☐ are
+off by default and activated via feature flags in settings.
 
 # ''Literal on raw REF'' — a real tiddler always beats an alias or
   pseudo expansion. Avoids silent redirection if a tiddler and an alias
   share a name.
-# ''Alias rewrite'' — exact aliases (tiddlers tagged
+# ☐ ''Alias rewrite'' — exact aliases (tiddlers tagged
   `$:/tags/NamespaceAlias` with `short` + `expands-to` fields) and
   pattern aliases (`$:/tags/NamespacePatternAlias`, `pattern` +
   `replacement`). Chained up to 3 hops for cycle safety.
-# ''Pseudo-segment expansion'' — any segment starting with `_` is looked
-  up in the pseudo-registry. Matching resolvers receive `(prefix, wiki)`
-  and return a replacement segment or null to fail expansion.
-# ''Literal on expanded REF'' — catches the aliased or pseudo-expanded
-  forms.
+# ''Mount rewrite'' — `$:/tags/NamespaceMount` with `from` / `to`.
+  Longest `from` wins; one-pass (no cascading).
+# ☐ ''Pseudo-segment expansion'' — any segment starting with `_` is
+  looked up in the pseudo-registry. Matching resolvers receive
+  `(prefix, wiki)` and return a replacement segment or null.
+# ''Literal on expanded REF'' — catches the aliased, mounted, or
+  pseudo-expanded forms.
 # ''Absolute'' — if REF contains a slash at this point, it's looked up
   literally only (no walk-up, no context prefix).
 # ''Context prefix'' — if a context is declared (see below), try
-  `<context>/REF`. Pseudo-segments inside the context are also expanded,
-  so `\context OWASP/ASVS/_latest` drifts with the newest version.
-# ''Walk-up'' — walk up the source tiddler's title prefix:
+  `<context>/REF`. When pseudo-expansion is enabled, pseudo-segments
+  inside the context are also expanded.
+# ☐ ''Walk-up'' — walk up the source tiddler's title prefix:
   from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
 # ''Unresolved'' — rendered with the `ns-unresolved` class
   (wavy underline + ⚠ marker).
 
+!! Feature flags
+
+Four optional features can be toggled in the
+[[settings tab|$:/plugins/rimir/namespace/settings]]. All are ''off'' by
+default. No server restart required — toggling a flag takes effect
+immediately.
+
+|!Flag |!What it enables |
+|Walk-up |Stage 8: path-based walk-up from source tiddler |
+|Implicit context |`context:` field fallback (in addition to `\context` pragma / `<$context>` widget) |
+|Pseudo expansion |`_latest` and other `_foo` pseudo-segment modules |
+|Aliases |Exact + pattern alias resolution |
+
 !! Declaring a context
 
-Three equivalent mechanisms — pick whichever fits:
+Two always-on mechanisms, plus an optional field-based fallback:
 
-* ''Pragma at the top of a tiddler:''
+* ''Pragma at the top of a tiddler'' (always active):
 
 ```
 \context OWASP/ASVS/4.0.3
@@ -49,7 +71,7 @@ Three equivalent mechanisms — pick whichever fits:
 now [[V3.3]] resolves to OWASP/ASVS/4.0.3/V3.3
 ```
 
-* ''Widget for a scoped region:''
+* ''Widget for a scoped region'' (always active):
 
 ```
 <$context prefix="OWASP/ASVS/4.0.3">
@@ -58,7 +80,7 @@ now [[V3.3]] resolves to OWASP/ASVS/4.0.3/V3.3
 regular rendering resumes outside
 ```
 
-* ''Field on the tiddler'' — declarative, persistent:
+* ''Field on the tiddler'' (requires ''implicit context'' flag):
 
 ```
 title: my-notes
@@ -230,11 +252,9 @@ mount points for diagnostics.
 !! Current limitations
 
 * Core TiddlyWiki's backlink index and the `relink` plugin only see the
-  literal `[[REF]]` string, not the resolved target. Backlinks from
-  walk-up, context, or pseudo-segment references are therefore missing
-  until a later stage ships an indexer.
+  literal `[[REF]]` string, not the resolved target. The plugin ships
+  its own backlinks index (see above) that resolves correctly.
 * When a tiddler with a `context:` field is transcluded from a scope
   that set `ns-context` (via pragma or widget), the outer scope wins.
   Workaround: add `\context <same-value>` at the top of the inner
   tiddler if you need it to "own" its context regardless.
-* No configuration UI yet.

@@ -14,15 +14,19 @@ describe("namespace: aliases", function() {
 
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
+	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
 		wiki.addTiddlers(tiddlers || []);
+		wiki.addTiddler({title: "$:/config/rimir/namespace/aliases", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/pseudo-expansion", text: "yes"});
 		wiki.addIndexersToWiki();
 		return wiki;
 	}
 
 	beforeEach(function() {
+		flags.invalidate();
 		aliases.invalidateAliases();
 		resolver.invalidatePseudoCache();
 	});

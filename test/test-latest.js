@@ -14,15 +14,18 @@ describe("namespace: _latest pseudo", function() {
 
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var latest = require("$:/plugins/rimir/namespace/pseudo/_latest.js");
+	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
 		wiki.addTiddlers(tiddlers || []);
+		wiki.addTiddler({title: "$:/config/rimir/namespace/pseudo-expansion", text: "yes"});
 		wiki.addIndexersToWiki();
 		return wiki;
 	}
 
 	beforeEach(function() {
+		flags.invalidate();
 		resolver.invalidatePseudoCache();
 	});
 

@@ -25,6 +25,7 @@ var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 var aliases  = require("$:/plugins/rimir/namespace/aliases.js");
 var mounts   = require("$:/plugins/rimir/namespace/mounts.js");
 var indexer  = require("$:/plugins/rimir/namespace/indexer.js");
+var flags    = require("$:/plugins/rimir/namespace/featureflags.js");
 
 exports.name = "rimir-namespace-cache-invalidation";
 exports.platforms = ["browser", "node"];
@@ -33,21 +34,39 @@ exports.synchronous = true;
 exports.startup = function() {
 	if(!$tw.wiki || !$tw.wiki.addEventListener) { return; }
 	$tw.wiki.addEventListener("change", function(changes) {
-		// Alias + mount caches: whole-cache drop. Cheap to rebuild.
-		aliases.invalidateAliases();
+		// If a feature flag config changed, invalidate the flags cache first
+		// so subsequent isEnabled() calls see the new value.
+		var configChanged = flags.isConfigChange(changes);
+		if(configChanged) {
+			flags.invalidate();
+		}
+		// Alias cache: only invalidate when aliases are enabled.
+		if(flags.isEnabled("aliases", $tw.wiki)) {
+			aliases.invalidateAliases();
+		}
+		// Mount cache: always (mounts are always-on).
 		mounts.invalidateMounts();
-		// Pseudo cache: prefix-scoped. Walk ancestors of every changed title.
+		// Pseudo cache: only walk ancestors when pseudo-expansion is enabled.
 		var changedTitles = [];
 		for(var title in changes) {
 			changedTitles.push(title);
-			var idx = title.lastIndexOf("/");
-			while(idx > 0) {
-				resolver.invalidatePseudoCache(title.substring(0, idx), $tw.wiki);
-				idx = title.lastIndexOf("/", idx - 1);
+		}
+		if(flags.isEnabled("pseudo-expansion", $tw.wiki)) {
+			for(var i = 0; i < changedTitles.length; i++) {
+				var idx = changedTitles[i].lastIndexOf("/");
+				while(idx > 0) {
+					resolver.invalidatePseudoCache(changedTitles[i].substring(0, idx), $tw.wiki);
+					idx = changedTitles[i].lastIndexOf("/", idx - 1);
+				}
 			}
 		}
-		// Backlinks index: incremental re-index for changed sources.
-		indexer.reindexMany(changedTitles, $tw.wiki);
+		// If a config flag changed, full rebuild (all resolutions may differ).
+		// Otherwise, incremental re-index for changed sources.
+		if(configChanged) {
+			indexer.rebuildAll($tw.wiki);
+		} else {
+			indexer.reindexMany(changedTitles, $tw.wiki);
+		}
 	});
 	// Initial backlinks index build — deferred one tick so other startup
 	// modules finish first. On large wikis this can be noticeable; if it

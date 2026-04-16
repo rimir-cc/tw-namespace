@@ -16,15 +16,22 @@ describe("namespace: resolver", function() {
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var mounts = require("$:/plugins/rimir/namespace/mounts.js");
+	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
 		wiki.addTiddlers(tiddlers || []);
+		// Enable all feature flags so existing tests pass unchanged.
+		wiki.addTiddler({title: "$:/config/rimir/namespace/walk-up", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/aliases", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/pseudo-expansion", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/implicit-context", text: "yes"});
 		wiki.addIndexersToWiki();
 		return wiki;
 	}
 
 	beforeEach(function() {
+		flags.invalidate();
 		resolver.invalidatePseudoCache();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();
@@ -159,6 +166,11 @@ describe("namespace: resolver", function() {
 				isShadowTiddler: function(t) { return t === "a/Y"; },
 				filterTiddlers: function() { return []; },
 				getTiddler: function() { return null; },
+				getTiddlerText: function(title, fallback) {
+					// Feature flags: enable walk-up for this test.
+					if(title === "$:/config/rimir/namespace/walk-up") { return "yes"; }
+					return fallback || "";
+				},
 				each: function() {},
 				eachShadow: function() {}
 			};

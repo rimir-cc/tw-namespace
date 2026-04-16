@@ -17,15 +17,21 @@ describe("namespace: indexer", function() {
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var mounts = require("$:/plugins/rimir/namespace/mounts.js");
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
+	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
 		wiki.addTiddlers(tiddlers || []);
+		wiki.addTiddler({title: "$:/config/rimir/namespace/walk-up", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/aliases", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/pseudo-expansion", text: "yes"});
+		wiki.addTiddler({title: "$:/config/rimir/namespace/implicit-context", text: "yes"});
 		wiki.addIndexersToWiki();
 		return wiki;
 	}
 
 	beforeEach(function() {
+		flags.invalidate();
 		indexer.reset();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();

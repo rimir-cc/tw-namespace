@@ -5,34 +5,62 @@ caption: settings
 
 ! Namespace — settings & diagnostics
 
-Read-only view of what the resolver currently sees: pseudo-segments,
-aliases, mount points, and the backlinks index. Click through to the
+!! Feature flags
+
+Each feature is off by default. Toggle to enable.
+
+<$checkbox tiddler="$:/config/rimir/namespace/walk-up" field="text" checked="yes" unchecked="no" default="no"> ''Walk-up'' — resolve bare refs by climbing the source tiddler's path segments</$checkbox>
+
+<$checkbox tiddler="$:/config/rimir/namespace/implicit-context" field="text" checked="yes" unchecked="no" default="no"> ''Implicit context'' — derive context from the `context` field on tiddlers</$checkbox>
+
+<$checkbox tiddler="$:/config/rimir/namespace/pseudo-expansion" field="text" checked="yes" unchecked="no" default="no"> ''Pseudo expansion'' — enable `_latest` and other pseudo-segment modules</$checkbox>
+
+<$checkbox tiddler="$:/config/rimir/namespace/aliases" field="text" checked="yes" unchecked="no" default="no"> ''Aliases'' — enable exact and pattern alias resolution</$checkbox>
+
+---
+
+Diagnostic view of what the resolver currently sees. Click through to the
 defining tiddler for each.
 
 !! Pseudo-segments
 
+<$reveal type="match" state="$:/config/rimir/namespace/pseudo-expansion" text="no" default="no">
+//Feature disabled — enable in Feature flags above.//
+</$reveal>
+<$reveal type="nomatch" state="$:/config/rimir/namespace/pseudo-expansion" text="no" default="no">
 Modules registered as `module-type: rimir-ns-pseudo`. Each handles
 one `_foo` token encountered as a path segment.
 
 <$list filter="[all[tiddlers+shadows]is[system]prefix[$:/plugins/]] :filter[<currentTiddler>has[module-type]get[module-type]match[rimir-ns-pseudo]]" emptyMessage="<em>none registered</em>">
 * <$link to=<<currentTiddler>>/> — <code>{{{ [<currentTiddler>get[title]] }}}</code>
 </$list>
+</$reveal>
 
 !! Exact aliases
 
+<$reveal type="match" state="$:/config/rimir/namespace/aliases" text="no" default="no">
+//Feature disabled — enable in Feature flags above.//
+</$reveal>
+<$reveal type="nomatch" state="$:/config/rimir/namespace/aliases" text="no" default="no">
 Tiddlers tagged `$:/tags/NamespaceAlias` with `short` + `expands-to`.
 
 <$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespaceAlias]]" emptyMessage="<em>none defined</em>">
 * <code><$view field="short"/></code> → <code><$view field="expands-to"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
 </$list>
+</$reveal>
 
 !! Pattern aliases
 
+<$reveal type="match" state="$:/config/rimir/namespace/aliases" text="no" default="no">
+//Feature disabled — enable in Feature flags above.//
+</$reveal>
+<$reveal type="nomatch" state="$:/config/rimir/namespace/aliases" text="no" default="no">
 Tiddlers tagged `$:/tags/NamespacePatternAlias` with `pattern` + `replacement`.
 
 <$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespacePatternAlias]]" emptyMessage="<em>none defined</em>">
 * <code><$view field="pattern"/></code> → <code><$view field="replacement"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
 </$list>
+</$reveal>
 
 !! Mount points
 
