@@ -13,6 +13,16 @@ jobs:
         with:
           node-version: '20'
       - run: npm install tiddlywiki
+      - name: Stage relink.json where the test-edition expects it
+        # The test-edition's tiddlywiki.files references
+        # ../../../../../tiddlers/_system/plugins/flibbles/relink.json
+        # (relative to test-edition/tiddlers/) which resolves to
+        # /tmp/tiddlers/_system/plugins/flibbles/relink.json once the
+        # plugin is staged at /tmp/plugins/rimir/namespace/. Locally this
+        # path lives in the dev-wiki; in CI we ship a copy as a fixture.
+        run: |
+          mkdir -p /tmp/tiddlers/_system/plugins/flibbles
+          cp .github/ci-fixtures/relink.json /tmp/tiddlers/_system/plugins/flibbles/relink.json
       - name: Run tests
         run: |
           mkdir -p /tmp/plugins/rimir/namespace
