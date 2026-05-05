@@ -110,11 +110,32 @@ describe("namespace: resolver", function() {
 			expect(r.resolved).toBeNull();
 		});
 
-		it("does not walk up absolute refs", function() {
-			// source has prefix that COULD find target via walk-up if ref
-			// were bare, but ref has / so walk-up is disabled.
-			var wiki = setupWiki([{title: "a/X", text: ""}]);
-			var r = resolver.resolve("b/X", "a/somewhere", wiki);
+		it("walks up multi-segment refs to find an ancestor match", function() {
+			// REF contains '/', but it's a relative subpath — walk-up still
+			// applies and finds the ancestor candidate.
+			var wiki = setupWiki([{title: "a/b/c/d", text: ""}]);
+			var r = resolver.resolve("c/d", "a/b/source", wiki);
+			expect(r.status).toBe("walkup");
+			expect(r.resolved).toBe("a/b/c/d");
+		});
+
+		it("walk-up tries the deepest ancestor first for multi-segment refs", function() {
+			// Both a/b/X/Y and a/X/Y exist; from source a/b/c the walk-up
+			// should hit a/b/X/Y (closest ancestor) before a/X/Y.
+			var wiki = setupWiki([
+				{title: "a/b/X/Y", text: ""},
+				{title: "a/X/Y", text: ""}
+			]);
+			var r = resolver.resolve("X/Y", "a/b/c", wiki);
+			expect(r.status).toBe("walkup");
+			expect(r.resolved).toBe("a/b/X/Y");
+		});
+
+		it("system-namespace refs ($:/...) never walk up or use context", function() {
+			// $:/foo is treated as absolute; even if walk-up could synthesize
+			// a hit, it's skipped to avoid degenerate $:/REF matches.
+			var wiki = setupWiki([{title: "$:/foo", text: ""}]);
+			var r = resolver.resolve("$:/missing", "$:/plugins/x/source", wiki);
 			expect(r.status).toBe("unresolved");
 		});
 
@@ -190,10 +211,11 @@ describe("namespace: resolver", function() {
 			expect(r.resolved).toBe("ctx/X");
 		});
 
-		it("ignores context if ref has /", function() {
+		it("applies context to multi-segment refs too", function() {
 			var wiki = setupWiki([{title: "ctx/a/X", text: ""}]);
 			var r = resolver.resolve("a/X", "some/source", wiki, {context: "ctx"});
-			expect(r.status).toBe("unresolved");
+			expect(r.status).toBe("context");
+			expect(r.resolved).toBe("ctx/a/X");
 		});
 
 		it("doesn't use context if literal already matched", function() {

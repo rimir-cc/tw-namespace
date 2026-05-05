@@ -16,13 +16,19 @@ Resolution pipeline for a reference REF looked up from source tiddler SRC:
   4. Expand pseudos — [optional] any segment beginning with "_" is looked
                       up in the pseudo-registry (module-type: rimir-ns-pseudo).
   5. Literal on expanded — catches aliased/mounted/pseudo-expanded forms.
-  6. Absolute       — REF contains '/', looked up literally only; no
-                      further walk-up/context.
-  7. Context prefix — if options.context is set (from \context pragma or
+  6. Context prefix — if options.context is set (from \context pragma or
                       <$context> widget), try "<context>/REF" before walk-up.
-  8. Walk-up        — [optional] walk prefixes of SRC and try
+                      Applies whether or not REF contains '/'.
+  7. Walk-up        — [optional] walk prefixes of SRC and try
                       "<prefix>/REF" at each depth. First hit wins.
-  9. Unresolved     — no candidate matched.
+                      Applies whether or not REF contains '/' — a multi-
+                      segment REF like "test/sum" can still resolve via
+                      ancestor prefixes (e.g. source "a/b/c" + REF "c/X"
+                      → "a/b/c/X" then "a/b/X" then "a/X").
+  8. Unresolved     — no candidate matched.
+
+System-namespace refs ($:/...) short-circuit to unresolved before
+context+walk-up to avoid degenerate matches like "$:/REF".
 
 Stages marked [optional] are gated by feature flags (see featureflags.js).
 All four optional features default to OFF; users enable them in the
@@ -285,15 +291,12 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 		var status = wasMounted ? "mount" : (wasAliased ? "alias" : "literal");
 		return {status: status, resolved: expanded, tried: tried};
 	}
-	// 6. Absolute (has '/'): no further walk-up or context.
-	if(expanded.indexOf("/") !== -1) {
-		return {status: "unresolved", resolved: null, tried: tried};
-	}
-	// System-namespace refs never walk up or use context.
+	// System-namespace refs never walk up or use context — anything
+	// starting with $:/ is treated as absolute.
 	if(expanded.indexOf("$:/") === 0) {
 		return {status: "unresolved", resolved: null, tried: tried};
 	}
-	// 7. Context prefix — try "<context>/REF" when a declared context is
+	// 6. Context prefix — try "<context>/REF" when a declared context is
 	//    present. Pseudo-segments in the context string expand too, so
 	//    e.g. `\context OWASP/ASVS/_latest` drifts with the newest version.
 	if(options.context) {
@@ -308,7 +311,7 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 			}
 		}
 	}
-	// 8. Walk-up from the source tiddler's prefix.
+	// 7. Walk-up from the source tiddler's prefix.
 	//    Gated by the "walk-up" feature flag.
 	if(sourceTitle && flags.isEnabled("walk-up", wiki)) {
 		var segs = exports.splitPath(sourceTitle);

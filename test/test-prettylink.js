@@ -42,19 +42,31 @@ describe("namespace: prettylink rule", function() {
 			expect(attr.value).toBe("Foo");
 		});
 
-		it("wraps a $link child with filtered to/class attributes", function() {
+		it("wraps a $link child with filtered to/class attributes referencing __nssrc__", function() {
 			var letNode = inline(parse("[[Foo]]"))[0];
 			expect(letNode.children.length).toBe(1);
 			var link = letNode.children[0];
 			expect(link.type).toBe("link");
 			expect(link.attributes.to).toEqual({
 				type: "filtered",
-				filter: "[<__nsref__>ns-resolve<currentTiddler>]"
+				filter: "[<__nsref__>ns-resolve<__nssrc__>]"
 			});
 			expect(link.attributes["class"]).toEqual({
 				type: "filtered",
-				filter: "[<__nsref__>ns-resolve-class<currentTiddler>]"
+				filter: "[<__nsref__>ns-resolve-class<__nssrc__>]"
 			});
+		});
+
+		it("emits a __nssrc__ attribute that prefers thisTiddler over currentTiddler", function() {
+			// thisTiddler is set by $transclude (TW 5.4.0+), currentTiddler
+			// by the $tiddler widget. The let's __nssrc__ must pick whichever
+			// is set so walk-up has a non-empty source title.
+			var letNode = inline(parse("[[Foo]]"))[0];
+			var attr = letNode.attributes["__nssrc__"];
+			expect(attr).toBeDefined();
+			expect(attr.name).toBe("__nssrc__");
+			expect(attr.type).toBe("filtered");
+			expect(attr.filter).toBe("[<thisTiddler>!is[blank]] ~[<currentTiddler>]");
 		});
 
 		it("uses the ref as link text when no `text|` prefix", function() {
