@@ -12,7 +12,8 @@ The plugin is **explicit-first**: advanced features are off by default and toggl
 
 | Flag | What it enables |
 |------|-----------------|
-| Walk-up | Path-based walk-up from source tiddler title |
+| Walk-up | Path-based walk-up from source tiddler title (ancestors) |
+| Self-prefix | `<sourceTitle>/REF` lookup (descendants) |
 | Implicit context | `context:` field fallback on tiddlers |
 | Pseudo expansion | `_latest` and other `_foo` pseudo-segment modules |
 | Aliases | Exact + pattern alias resolution |
@@ -26,10 +27,11 @@ For a link `[[REF]]` rendered inside a tiddler:
 3. **Mount rewrite** — prefix mapping via `$:/tags/NamespaceMount`.
 4. **Pseudo expansion** *(optional)* — `_latest` and pluggable `_foo` segments.
 5. **Literal on expanded** — catches aliased/mounted/pseudo-expanded forms.
-6. **Absolute** — if REF contains `/`, try it as a full title only.
+6. **`$:/` short-circuit** — `$:/`-prefixed refs are absolute (no context, no walk).
 7. **Context prefix** — `\context` pragma or `<$context>` widget scope.
-8. **Walk-up** *(optional)* — climb source title segments.
-9. **Unresolved** — wavy underline + warning marker; link still navigable.
+8. **Self-prefix** *(optional)* — try `<sourceTitle>/REF` (descendant resolution).
+9. **Walk-up** *(optional)* — climb source title segments (ancestor resolution).
+10. **Unresolved** — wavy underline + warning marker; link still navigable.
 
 ## Quick start
 

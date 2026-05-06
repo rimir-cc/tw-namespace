@@ -336,4 +336,104 @@ describe("namespace: resolver", function() {
 
 	});
 
+	describe("self-prefix", function() {
+
+		// Helper: setupWiki keeps the four pre-existing flags ON (matches the
+		// default in this test file). This helper extends it with self-prefix.
+		function setupWithSelfPrefix(tiddlers, on) {
+			var wiki = setupWiki(tiddlers);
+			wiki.addTiddler({title: "$:/config/rimir/namespace/self-prefix", text: on ? "yes" : "no"});
+			flags.invalidate();
+			return wiki;
+		}
+
+		it("is OFF by default — descendants are not auto-resolved", function() {
+			var wiki = setupWiki([
+				{title: "a/b/c", text: ""},
+				{title: "a/b/c/x", text: ""}
+			]);
+			// No explicit toggle: setupWiki doesn't enable self-prefix.
+			expect(resolver.resolve("x", "a/b/c", wiki).status).toBe("unresolved");
+		});
+
+		it("resolves a single-segment descendant ref when ON", function() {
+			var wiki = setupWithSelfPrefix([
+				{title: "a/b/c", text: ""},
+				{title: "a/b/c/x", text: ""}
+			], true);
+			var r = resolver.resolve("x", "a/b/c", wiki);
+			expect(r.status).toBe("self");
+			expect(r.resolved).toBe("a/b/c/x");
+		});
+
+		it("resolves a multi-segment descendant ref when ON", function() {
+			var wiki = setupWithSelfPrefix([
+				{title: "a/b/c", text: ""},
+				{title: "a/b/c/yt/y/z", text: ""}
+			], true);
+			var r = resolver.resolve("yt/y/z", "a/b/c", wiki);
+			expect(r.status).toBe("self");
+			expect(r.resolved).toBe("a/b/c/yt/y/z");
+		});
+
+		it("falls through to walk-up when no descendant exists", function() {
+			var wiki = setupWithSelfPrefix([
+				{title: "a/b/c", text: ""},
+				{title: "a/x", text: ""}
+			], true);
+			var r = resolver.resolve("x", "a/b/c", wiki);
+			expect(r.status).toBe("walkup");
+			expect(r.resolved).toBe("a/x");
+		});
+
+		it("Stage 1 literal still wins when a top-level tiddler matches the ref", function() {
+			var wiki = setupWithSelfPrefix([
+				{title: "x", text: ""},                // top-level literal
+				{title: "a/b/c", text: ""},
+				{title: "a/b/c/x", text: ""}            // descendant also exists
+			], true);
+			var r = resolver.resolve("x", "a/b/c", wiki);
+			expect(r.status).toBe("literal");
+			expect(r.resolved).toBe("x");
+		});
+
+		it("Stage 6 context still wins over self-prefix when both would match", function() {
+			var wiki = setupWithSelfPrefix([
+				{title: "a/b/c", text: ""},
+				{title: "ctx/x", text: ""},             // context match
+				{title: "a/b/c/x", text: ""}            // self-prefix match
+			], true);
+			var r = resolver.resolve("x", "a/b/c", wiki, {context: "ctx"});
+			expect(r.status).toBe("context");
+			expect(r.resolved).toBe("ctx/x");
+		});
+
+		it("$:/ ref still short-circuits to unresolved before self-prefix runs", function() {
+			// The $:/ guard at resolver.js:300 fires when the REF (not source)
+			// starts with $:/. A $:/ ref means "absolute system title" and
+			// shouldn't be contextualized or walked.
+			var wiki = setupWithSelfPrefix([
+				{title: "a/b/c", text: ""},
+				{title: "a/b/c/$:/foo", text: ""}    // would self-prefix-match
+			], true);
+			var r = resolver.resolve("$:/foo", "a/b/c", wiki);
+			expect(r.status).toBe("unresolved");
+		});
+
+		it("self-prefix runs from a $:/ source — consistent with walk-up", function() {
+			// Walk-up runs from $:/ sources (with minI=2). Self-prefix should
+			// behave the same: $:/ source + plain ref = system descendant
+			// candidate. Allowed because we never construct "$:/<ref>" — only
+			// "<source>/<ref>" which is well-formed.
+			var wiki = setupWithSelfPrefix([
+				{title: "$:/plugins/foo/bar", text: ""},
+				{title: "$:/plugins/foo/bar/x", text: ""}
+			], true);
+			var r = resolver.resolve("x", "$:/plugins/foo/bar", wiki);
+			expect(r.status).toBe("self");
+			expect(r.resolved).toBe("$:/plugins/foo/bar/x");
+		});
+
+	});
+
 });

@@ -17,6 +17,8 @@ Each feature is off by default. Toggle to enable.
 
 <$checkbox tiddler="$:/config/rimir/namespace/aliases" field="text" checked="yes" unchecked="no" default="no"> ''Aliases'' — enable exact and pattern alias resolution</$checkbox>
 
+<$checkbox tiddler="$:/config/rimir/namespace/self-prefix" field="text" checked="yes" unchecked="no" default="no"> ''Self-prefix'' — resolve descendant refs by prepending the source title (`<source>/<ref>`)</$checkbox>
+
 ---
 
 Diagnostic view of what the resolver currently sees. Click through to the

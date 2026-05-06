@@ -35,11 +35,14 @@ off by default and activated via feature flags in settings.
   `(prefix, wiki)` and return a replacement segment or null.
 # ''Literal on expanded REF'' — catches the aliased, mounted, or
   pseudo-expanded forms.
-# ''Absolute'' — if REF contains a slash at this point, it's looked up
-  literally only (no walk-up, no context prefix).
+# ''$:/ short-circuit'' — refs starting with `$:/` are treated as
+  absolute system titles: literal-only, never contextualized or walked.
 # ''Context prefix'' — if a context is declared (see below), try
   `<context>/REF`. When pseudo-expansion is enabled, pseudo-segments
   inside the context are also expanded.
+# ☐ ''Self-prefix'' — try `<sourceTitle>/REF`. Resolves descendant
+  refs in deep namespaces. Walk-up never finds descendants (it only
+  walks up parents), so this is the explicit hook for that case.
 # ☐ ''Walk-up'' — walk up the source tiddler's title prefix:
   from //source// `a/b/c/d/X`, try `a/b/c/d/REF`, `a/b/c/REF`,
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
@@ -48,13 +51,14 @@ off by default and activated via feature flags in settings.
 
 !! Feature flags
 
-Four optional features can be toggled in the
+Five optional features can be toggled in the
 [[settings tab|$:/plugins/rimir/namespace/settings]]. All are ''off'' by
 default. No server restart required — toggling a flag takes effect
 immediately.
 
 |!Flag |!What it enables |
-|Walk-up |Stage 8: path-based walk-up from source tiddler |
+|Walk-up |Path-based walk-up from source tiddler (ancestors) |
+|Self-prefix |`<sourceTitle>/REF` lookup (descendants) |
 |Implicit context |`context:` field fallback (in addition to `\context` pragma / `<$context>` widget) |
 |Pseudo expansion |`_latest` and other `_foo` pseudo-segment modules |
 |Aliases |Exact + pattern alias resolution |

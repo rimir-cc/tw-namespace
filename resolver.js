@@ -19,13 +19,17 @@ Resolution pipeline for a reference REF looked up from source tiddler SRC:
   6. Context prefix — if options.context is set (from \context pragma or
                       <$context> widget), try "<context>/REF" before walk-up.
                       Applies whether or not REF contains '/'.
-  7. Walk-up        — [optional] walk prefixes of SRC and try
+  7. Self-prefix    — [optional] try "<sourceTitle>/REF" before walk-up.
+                      Resolves descendant refs in deep namespaces without
+                      per-tiddler bookkeeping. Walk-up never tries this
+                      candidate (it walks up parents, not down children).
+  8. Walk-up        — [optional] walk prefixes of SRC and try
                       "<prefix>/REF" at each depth. First hit wins.
                       Applies whether or not REF contains '/' — a multi-
                       segment REF like "test/sum" can still resolve via
                       ancestor prefixes (e.g. source "a/b/c" + REF "c/X"
                       → "a/b/c/X" then "a/b/X" then "a/X").
-  8. Unresolved     — no candidate matched.
+  9. Unresolved     — no candidate matched.
 
 System-namespace refs ($:/...) short-circuit to unresolved before
 context+walk-up to avoid degenerate matches like "$:/REF".
@@ -240,7 +244,7 @@ options:     optional; {context: "<prefix>"} to supply a declared context
 
 Returns: {status, resolved, tried}
   status:   "literal" | "alias" | "mount" | "absolute" | "context" |
-            "walkup" | "unresolved"
+            "self" | "walkup" | "unresolved"
   resolved: resolved title or null
   tried:    ordered array of every title we checked (useful for tooltips)
 */
@@ -311,7 +315,18 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 			}
 		}
 	}
-	// 7. Walk-up from the source tiddler's prefix.
+	// 7. Self-prefix — try "<sourceTitle>/REF" when the feature is on.
+	//    Catches descendant refs (e.g. source "a/b/c" + REF "x/y"
+	//    → "a/b/c/x/y") that walk-up would miss because walk-up only
+	//    considers ancestor prefixes.
+	if(sourceTitle && flags.isEnabled("self-prefix", wiki)) {
+		var selfCandidate = sourceTitle + "/" + expanded;
+		tried.push(selfCandidate);
+		if(exists(wiki, selfCandidate)) {
+			return {status: "self", resolved: selfCandidate, tried: tried};
+		}
+	}
+	// 8. Walk-up from the source tiddler's prefix.
 	//    Gated by the "walk-up" feature flag.
 	if(sourceTitle && flags.isEnabled("walk-up", wiki)) {
 		var segs = exports.splitPath(sourceTitle);

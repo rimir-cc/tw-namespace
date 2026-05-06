@@ -5,14 +5,16 @@ module-type: library
 
 Cached feature-flag reader for optional resolver stages.
 
-Four flags gate expensive or implicit pipeline stages. All default to
+Five flags gate expensive or implicit pipeline stages. All default to
 "no" (off). Users toggle them via config tiddlers in the plugin's
 settings tab.
 
-  $:/config/rimir/namespace/walk-up           — stage 8 path walk-up
+  $:/config/rimir/namespace/walk-up           — path walk-up
   $:/config/rimir/namespace/implicit-context   — context: field fallback
   $:/config/rimir/namespace/pseudo-expansion   — _latest and pseudo modules
   $:/config/rimir/namespace/aliases            — exact + pattern alias rewrite
+  $:/config/rimir/namespace/self-prefix        — descendant resolution
+                                                 (try "<source>/<ref>")
 
 Reading tiddler text on every resolve() call would be expensive, so we
 cache the four booleans and invalidate on wiki change events (startup.js
@@ -23,7 +25,7 @@ calls invalidate() when it detects a config tiddler in the change set).
 "use strict";
 
 var CONFIG_PREFIX = "$:/config/rimir/namespace/";
-var FLAGS = ["walk-up", "implicit-context", "pseudo-expansion", "aliases"];
+var FLAGS = ["walk-up", "implicit-context", "pseudo-expansion", "aliases", "self-prefix"];
 
 // null = not yet read. Object maps flag name → boolean.
 var cached = null;
