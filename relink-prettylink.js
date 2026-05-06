@@ -18,18 +18,21 @@ Strategy:
      and re-resolve the SAME ref text. If it still resolves to toTitle
      — meaning the user's short form remains valid even though the
      target moved — leave the ref alone.
-  4. Otherwise rewrite. Style preservation:
-       - `[[label|target]]` → keep label, replace target with toTitle
-       - `[[oldFullTitle]]` → `[[toTitle]]` (absolute → absolute)
-       - `[[shortRef]]`     → `[[shortRef|toTitle]]` (preserve display
-         while pinning the target absolutely; user can re-shorten later)
+  4. Try to find the SHORTEST suffix of toTitle that resolves to toTitle
+     from the source post-rename. e.g. rename `a/b/c/d` → `a/b/c/e`
+     from source `a/b/c`: try `e` first (resolves via self-prefix),
+     then `c/e`, then full title. First valid form wins.
+  5. Style preservation:
+       - `[[oldFullTitle]]`           → `[[newFullTitle]]`
+       - `[[shortRef]]` + short works → `[[newShortRef]]`
+       - `[[shortRef]]` + only abs    → `[[shortRef|newFullTitle]]`
+       - `[[label|target]]` keeps label, replaces target similarly
 
 Batch renames (e.g. relink-titles cascading `knowledge/llm` → `knowledge/ai`):
-each child rename runs this rule independently. Because relink processes
-them sequentially and doesn't expose the full batch, we can't know that
-the source itself will be renamed in a parallel way — so short refs in
-in-subtree sources get pinned to the absolute new target. After the
-source's own rename runs, the absolute ref still resolves correctly.
+each child rename runs this rule independently. Smart shortening
+also helps here — `[[bar]]` from `knowledge/llm/foo` becomes `[[ai/bar]]`
+when `knowledge/llm/bar` → `knowledge/ai/bar` (walk-up post-rename
+catches the new title via the `knowledge` ancestor).
 
 \*/
 
@@ -84,6 +87,31 @@ function wrapWikiForRename(wiki, fromTitle, toTitle) {
 
 function isExternal(ref) {
 	return $tw.utils.isLinkExternal(ref);
+}
+
+/*
+Find the shortest suffix of `toTitle` (split on `/`) that resolves back to
+`toTitle` from `sourceTitle` against the post-rename `simWiki`. Returns
+the candidate string, or null if only the full title works (caller falls
+back to a label-preserving absolute pin in that case).
+
+The full title is excluded from the search — it's the trivial fallback
+and should be handled by the caller's pin branch when no shorter form
+resolves.
+
+System-namespace targets ($:/...) skip this entirely; absolute is the
+only safe form for them.
+*/
+function findShortestSelfRef(toTitle, sourceTitle, simWiki, options) {
+	if(!toTitle || toTitle.indexOf("$:/") === 0) { return null; }
+	var segs = toTitle.split("/");
+	for(var i = 1; i < segs.length; i++) {
+		var candidate = segs.slice(segs.length - i).join("/");
+		if(!candidate) { continue; }
+		var r = resolver.resolve(candidate, sourceTitle, simWiki, options);
+		if(r.resolved === toTitle) { return candidate; }
+	}
+	return null;
 }
 
 /* ---------- relinkwikitextrule API ---------- */
@@ -152,10 +180,18 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 
 		var newText;
 		if(rawTarget !== undefined) {
-			// `[[label|target]]` — keep label, replace target with toTitle
-			// unless the existing target text would still resolve correctly.
+			// `[[label|target]]` — keep label, replace target.
 			if(afterSame.resolved === toTitle) { return undefined; }
-			newText = "[[" + rawDisplay + "|" + toTitle + "]]";
+			var newTarget;
+			if(rawTarget === fromTitle) {
+				// User wrote the full title explicitly — keep absolute style.
+				newTarget = toTitle;
+			} else {
+				// Try smart shortening for the target portion; fall back to
+				// the absolute new title.
+				newTarget = findShortestSelfRef(toTitle, sourceTitle, simWiki, {context: context}) || toTitle;
+			}
+			newText = "[[" + rawDisplay + "|" + newTarget + "]]";
 		} else if(ref === fromTitle) {
 			// Absolute literal — rewrite to new absolute literal.
 			newText = "[[" + toTitle + "]]";
@@ -163,9 +199,16 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 			// Short ref still resolves correctly — leave alone.
 			return undefined;
 		} else {
-			// Short ref no longer resolves; preserve display text via a
-			// labeled form pinning the absolute target.
-			newText = "[[" + ref + "|" + toTitle + "]]";
+			// Try to find a new short form that resolves post-rename. If
+			// found, use it as both display and target. Else preserve the
+			// original display text via a labeled absolute pin.
+			var shortRef = findShortestSelfRef(toTitle, sourceTitle, simWiki, {context: context});
+			if(shortRef) {
+				if(shortRef === ref) { return undefined; }
+				newText = "[[" + shortRef + "]]";
+			} else {
+				newText = "[[" + ref + "|" + toTitle + "]]";
+			}
 		}
 		entry = {output: newText};
 	} finally {

@@ -166,17 +166,16 @@ describe("namespace: relink integration", function() {
 				.toBe("[[friendly|knowledge/ai/foo]]");
 		});
 
-		it("rewrites a walk-up-resolved short ref to a labeled absolute when target moves out of scope", function() {
+		it("smart-shortens a walk-up-resolved short ref when the new title has a valid shorter form", function() {
 			var wiki = setupWithFlags([
 				{title: "knowledge/llm/foo", text: "see [[bar]]"},
 				{title: "knowledge/llm/bar", text: ""}
 			]);
 			wiki.relinkTiddler("knowledge/llm/bar", "knowledge/ai/bar");
-			// [[bar]] resolved to knowledge/llm/bar via walk-up. After rename,
-			// walk-up from knowledge/llm/foo can't reach knowledge/ai/bar.
-			// Preserve the display "bar" with absolute target.
+			// Smart shortening tries: [[bar]] (no, walk-up doesn't reach
+			// the new location), [[ai/bar]] (yes, walk-up via knowledge → ai/bar).
 			expect(wiki.getTiddler("knowledge/llm/foo").fields.text)
-				.toBe("see [[bar|knowledge/ai/bar]]");
+				.toBe("see [[ai/bar]]");
 		});
 
 		it("leaves a walk-up short ref unchanged when target stays reachable post-rename", function() {
@@ -200,8 +199,10 @@ describe("namespace: relink integration", function() {
 				{title: "unrelated", text: ""}
 			]);
 			wiki.relinkTiddler("knowledge/llm/bar", "knowledge/ai/bar");
+			// [[bar]] gets smart-shortened to [[ai/bar]]; [[unrelated]]
+			// resolves to a different tiddler so it stays put.
 			expect(wiki.getTiddler("knowledge/llm/foo").fields.text)
-				.toBe("see [[bar|knowledge/ai/bar]] and [[unrelated]]");
+				.toBe("see [[ai/bar]] and [[unrelated]]");
 		});
 
 		it("does not touch external links", function() {
@@ -223,7 +224,7 @@ describe("namespace: relink integration", function() {
 				.toBe("[[bar|knowledge/ai/bar]]");
 		});
 
-		it("rewrites a self-prefix-resolved short ref", function() {
+		it("smart-shortens a self-prefix-resolved short ref to the new path's last segments", function() {
 			var wiki = setupWithFlags([
 				{title: "knowledge/llm/v4", text: "see [[notes/foo]]"},
 				{title: "knowledge/llm/v4/notes/foo", text: ""}
@@ -232,11 +233,20 @@ describe("namespace: relink integration", function() {
 				"knowledge/llm/v4/notes/foo",
 				"knowledge/llm/v4/articles/foo"
 			);
-			// Post-rename, [[notes/foo]] from knowledge/llm/v4 still tries
-			// self-prefix → knowledge/llm/v4/notes/foo (no longer exists).
-			// Walk-up tries other prefixes — none match. Pinned absolute.
+			// Smart shortening tries [[foo]] (walk-up from v4 can't find it),
+			// then [[articles/foo]] which self-prefix resolves to the new
+			// title. That's the rewrite.
 			expect(wiki.getTiddler("knowledge/llm/v4").fields.text)
-				.toBe("see [[notes/foo|knowledge/llm/v4/articles/foo]]");
+				.toBe("see [[articles/foo]]");
+		});
+
+		it("user's example: rename a/b/c/d → a/b/c/e from source a/b/c shortens [[d]] to [[e]]", function() {
+			var wiki = setupWithFlags([
+				{title: "a/b/c", text: "[[d]]"},
+				{title: "a/b/c/d", text: ""}
+			], {selfPrefix: true});
+			wiki.relinkTiddler("a/b/c/d", "a/b/c/e");
+			expect(wiki.getTiddler("a/b/c").fields.text).toBe("[[e]]");
 		});
 
 		it("handles batch rename of a subtree (knowledge/llm → knowledge/ai)", function() {
@@ -263,45 +273,36 @@ describe("namespace: relink integration", function() {
 			// Step 1: rename knowledge/llm/foo → knowledge/ai/foo.
 			renameTiddler("knowledge/llm/foo", "knowledge/ai/foo");
 			// knowledge/llm/bar's [[foo]] resolved (via walk-up) to knowledge/llm/foo
-			// = fromTitle. Post-rename simulation from knowledge/llm/bar: walk-up
-			// tries knowledge/llm/foo (gone), knowledge/foo (no). Doesn't reach
-			// knowledge/ai/foo. → pinned to absolute.
+			// = fromTitle. Smart shortening finds "ai/foo" works post-rename
+			// (walk-up from knowledge/llm/bar climbs to knowledge/, then
+			// "knowledge/ai/foo" exists).
 			expect(wiki.getTiddler("knowledge/llm/bar").fields.text)
-				.toBe("see [[foo|knowledge/ai/foo]]");
+				.toBe("see [[ai/foo]]");
 
 			// Step 2: rename knowledge/llm/bar → knowledge/ai/bar.
 			renameTiddler("knowledge/llm/bar", "knowledge/ai/bar");
-			// knowledge/ai/foo's [[bar]]: pre-rename, walk-up from knowledge/ai/foo
-			// tries knowledge/ai/bar (no — only ai/foo exists in ai/ at this moment),
-			// then knowledge/bar (no), then bar (no). → unresolved BEFORE relink.
-			// So current.resolved !== fromTitle (knowledge/llm/bar). Our rule
-			// returns undefined — no rewrite needed (and none possible: the ref
-			// didn't resolve to fromTitle in the first place).
-			// HOWEVER, knowledge/llm/bar is the source for OTHER refs that may
-			// have been pinned. The labeled-absolute pin from step 1
-			// ([[foo|knowledge/ai/foo]] now sits in knowledge/ai/bar after move)
-			// DOES resolve to knowledge/ai/foo, which is correct.
+			// knowledge/ai/bar (was knowledge/llm/bar) now has "see [[ai/foo]]".
+			// That ref resolves to knowledge/ai/foo via walk-up — unchanged.
+			// knowledge/ai/foo's [[bar]] still says [[bar]] in raw text (its
+			// resolution was never to knowledge/llm/bar, since walk-up from
+			// ai/foo climbs to knowledge/ where ai/bar appears at the right
+			// time). Both end-state texts are functional.
 			expect(wiki.getTiddler("knowledge/ai/bar").fields.text)
-				.toBe("see [[foo|knowledge/ai/foo]]");
-			// And ai/foo's text is unchanged from input — but we expect it to
-			// link to ai/bar correctly post-rename.
+				.toBe("see [[ai/foo]]");
 			expect(wiki.getTiddler("knowledge/ai/foo").fields.text)
 				.toBe("see [[bar]]");
 		});
 
-		it("preserves [[label|target]] when the target stays a valid short ref", function() {
-			// Labeled form where target is a short ref that still resolves
-			// post-rename: leave unchanged.
+		it("rewrites [[label|target]] target with a smart-shortened form when available", function() {
 			var wiki = setupWithFlags([
 				{title: "knowledge/llm/foo", text: "[[click here|bar]]"},
 				{title: "knowledge/llm/bar", text: ""}
 			]);
 			// Rename within walk-up scope: bar → bar2 inside same parent.
 			wiki.relinkTiddler("knowledge/llm/bar", "knowledge/llm/bar2");
-			// Post-rename, [[click here|bar]] target "bar" no longer resolves
-			// (bar is gone). Must rewrite the target portion.
+			// Label preserved; target shortened (bar2 resolves via walk-up).
 			expect(wiki.getTiddler("knowledge/llm/foo").fields.text)
-				.toBe("[[click here|knowledge/llm/bar2]]");
+				.toBe("[[click here|bar2]]");
 		});
 
 	});

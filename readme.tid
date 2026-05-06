@@ -255,10 +255,13 @@ installed, renaming a tiddler automatically updates:
 * ''Namespace-resolved `[[REF]]` references'' — short refs whose
   current resolution (literal / walk-up / context / self-prefix) points
   to the renamed tiddler. Refs that still resolve correctly post-rename
-  are left alone; otherwise they're pinned to the new absolute title
-  while preserving the original display text:
-  `[[bar]]` → `[[bar|knowledge/ai/bar]]`. Absolute literal refs
-  rewrite cleanly: `[[knowledge/llm/foo]]` → `[[knowledge/ai/foo]]`.
+  are left alone. Otherwise the rule searches for the shortest suffix of
+  the new title that resolves correctly from the source (e.g. rename
+  `a/b/c/d` → `a/b/c/e` from source `a/b/c` rewrites `[[d]]` to
+  `[[e]]`). When even the full title is the only valid form, the ref
+  is pinned with a label-preserving form like `[[bar|knowledge/ai/bar]]`.
+  Absolute literal refs always rewrite cleanly:
+  `[[knowledge/llm/foo]]` → `[[knowledge/ai/foo]]`.
 
 Combined with the ''relink-titles'' companion plugin (which cascades
 renames to child tiddlers), renaming a parent like `OWASP/ASVS` to
