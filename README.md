@@ -43,7 +43,12 @@ For walk-up resolution without explicit context, enable the **Walk-up** flag in 
 
 ## Relink integration
 
-With the [relink plugin](https://github.com/flibbles/tw5-relink) installed, renaming a tiddler automatically updates `\context` pragmas and `<$context prefix="...">` attributes that reference it. Combined with relink-titles, parent renames cascade to child tiddlers and their references.
+With the [relink plugin](https://github.com/flibbles/tw5-relink) installed, renaming a tiddler automatically updates:
+
+- `\context` pragmas and `<$context prefix="...">` attributes that reference the renamed title.
+- **Namespace-resolved `[[REF]]` references** — short refs whose current resolution (literal / walk-up / context / self-prefix) points to the renamed tiddler. Refs that still resolve correctly post-rename stay untouched; otherwise they're pinned to the new absolute title while preserving the display text: `[[bar]]` → `[[bar|knowledge/ai/bar]]`. Absolute literal refs rewrite cleanly: `[[knowledge/llm/foo]]` → `[[knowledge/ai/foo]]`.
+
+Combined with relink-titles, parent renames cascade to child tiddlers and their references; internal short refs across the moved subtree get pinned to absolute on the way.
 
 ## Prerequisites
 
