@@ -92,4 +92,54 @@ describe("namespace: walk-up under transclusion (regression)", function() {
 		expect(html).toContain("ns-unresolved");
 	});
 
+	it("self-prefix resolves descendant refs end-to-end (knowledge-app scenario)", function() {
+		// Mirrors knowledge-app/views/note.tid — outer $context wraps body,
+		// inner $transclude $tiddler= sets thisTiddler. Source has the
+		// (current default) context: knowledge/llm field, which would make
+		// Stage 6 try knowledge/llm/yt/... first (no match) — self-prefix
+		// then catches the descendant.
+		var wiki = setupWiki([
+			{
+				title: "knowledge/llm/vendor/deepseek/model/v4",
+				context: "knowledge/llm",
+				text: "[[yt/AIsearch/engineeringDSV4]]"
+			},
+			{title: "knowledge/llm/vendor/deepseek/model/v4/yt/AIsearch/engineeringDSV4", text: ""}
+		]);
+		wiki.addTiddler({title: "$:/config/rimir/namespace/self-prefix", text: "yes"});
+		flags.invalidate();
+		var html = renderHtml(wiki,
+			"<$let viewTiddler=\"knowledge/llm/vendor/deepseek/model/v4\" " +
+			"      noteContext={{{ [<viewTiddler>get[context]] }}}>" +
+			"<$context prefix=<<noteContext>>>" +
+			"<$transclude $tiddler=<<viewTiddler>> $mode=\"block\"/>" +
+			"</$context>" +
+			"</$let>");
+		expect(html).toContain("ns-resolved\"");
+		expect(html).not.toContain("ns-unresolved");
+		// Sanity: link target is the descendant, not the area-prepended path.
+		// TW URL-encodes "/" to %2F in href, so check the encoded form.
+		expect(html).toContain("knowledge%2Fllm%2Fvendor%2Fdeepseek%2Fmodel%2Fv4%2Fyt%2FAIsearch%2FengineeringDSV4");
+	});
+
+	it("self-prefix off — same scenario stays unresolved (regression guard)", function() {
+		var wiki = setupWiki([
+			{
+				title: "knowledge/llm/vendor/deepseek/model/v4",
+				context: "knowledge/llm",
+				text: "[[yt/AIsearch/engineeringDSV4]]"
+			},
+			{title: "knowledge/llm/vendor/deepseek/model/v4/yt/AIsearch/engineeringDSV4", text: ""}
+		]);
+		// Don't enable self-prefix; default is off.
+		var html = renderHtml(wiki,
+			"<$let viewTiddler=\"knowledge/llm/vendor/deepseek/model/v4\" " +
+			"      noteContext={{{ [<viewTiddler>get[context]] }}}>" +
+			"<$context prefix=<<noteContext>>>" +
+			"<$transclude $tiddler=<<viewTiddler>> $mode=\"block\"/>" +
+			"</$context>" +
+			"</$let>");
+		expect(html).toContain("ns-unresolved");
+	});
+
 });
