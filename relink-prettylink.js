@@ -85,31 +85,70 @@ function wrapWikiForRename(wiki, fromTitle, toTitle) {
 	return sim;
 }
 
+/*
+Wrap a wiki so that fromTitle is treated as existing, regardless of its
+actual state. Needed because relink's bulkops calls deleteTiddler(from)
+BEFORE the nested relinkTiddler runs, so by the time our rule fires for
+a cascaded child rename the original fromTitle is already gone — the
+resolver can't reach what was the ref's target. With this wrap,
+"current" resolution sees the world as it was just before the rename.
+*/
+function wrapWikiForPreRename(wiki, fromTitle) {
+	var sim = Object.create(wiki);
+	sim.tiddlerExists = function(title) {
+		if(title === fromTitle) { return true; }
+		return wiki.tiddlerExists(title);
+	};
+	if(typeof wiki.isShadowTiddler === "function") {
+		sim.isShadowTiddler = function(title) {
+			return wiki.isShadowTiddler(title);
+		};
+	}
+	return sim;
+}
+
 function isExternal(ref) {
 	return $tw.utils.isLinkExternal(ref);
 }
 
 /*
-Find the shortest suffix of `toTitle` (split on `/`) that resolves back to
-`toTitle` from `sourceTitle` against the post-rename `simWiki`. Returns
-the candidate string, or null if only the full title works (caller falls
-back to a label-preserving absolute pin in that case).
+Pick a suffix of `toTitle` (split on `/`) that resolves back to `toTitle`
+from `sourceTitle` against the post-rename `simWiki`. Returns the
+candidate string, or null if only the full title works.
 
-The full title is excluded from the search — it's the trivial fallback
-and should be handled by the caller's pin branch when no shorter form
-resolves.
+Selection policy:
+  1. Try the SAME number of segments as the original ref first.
+     This preserves the user's chosen "depth" — e.g. `[[b/c/d]]` (3 segs)
+     stays a 3-segment form like `[[f/c/d]]` even when a 1-segment form
+     `[[d]]` would also resolve.
+  2. Otherwise try shortest-first from 1 up to (segs.length - 1).
+  3. Full title is excluded — caller pins absolute as fallback.
 
 System-namespace targets ($:/...) skip this entirely; absolute is the
 only safe form for them.
 */
-function findShortestSelfRef(toTitle, sourceTitle, simWiki, options) {
+function findGoodSelfRef(toTitle, sourceTitle, simWiki, options, originalSegCount) {
 	if(!toTitle || toTitle.indexOf("$:/") === 0) { return null; }
 	var segs = toTitle.split("/");
-	for(var i = 1; i < segs.length; i++) {
+	var maxI = segs.length - 1;
+	if(maxI < 1) { return null; }
+	function tryAt(i) {
 		var candidate = segs.slice(segs.length - i).join("/");
-		if(!candidate) { continue; }
+		if(!candidate) { return null; }
 		var r = resolver.resolve(candidate, sourceTitle, simWiki, options);
 		if(r.resolved === toTitle) { return candidate; }
+		return null;
+	}
+	// 1. Same length as the original ref (when in range).
+	if(originalSegCount && originalSegCount >= 1 && originalSegCount <= maxI) {
+		var same = tryAt(originalSegCount);
+		if(same) { return same; }
+	}
+	// 2. Shortest-first fallback.
+	for(var i = 1; i <= maxI; i++) {
+		if(i === originalSegCount) { continue; }
+		var hit = tryAt(i);
+		if(hit) { return hit; }
 	}
 	return null;
 }
@@ -169,9 +208,14 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 		var wiki = options.wiki;
 		if(!sourceTitle || !wiki) { return undefined; }
 		var context = getContextForSource(sourceTitle, wiki);
+		var refSegCount = ref.split("/").length;
 
 		// Does this ref currently point to the renamed tiddler?
-		var current = resolver.resolve(ref, sourceTitle, wiki, {context: context});
+		// Use a pre-rename wiki so cascaded child renames (where bulkops
+		// already deleted the old fromTitle before the nested relinkTiddler
+		// fires) still see the original target.
+		var preWiki = wrapWikiForPreRename(wiki, fromTitle);
+		var current = resolver.resolve(ref, sourceTitle, preWiki, {context: context});
 		if(current.resolved !== fromTitle) { return undefined; }
 
 		// Will the same ref still resolve to toTitle after the rename?
@@ -187,9 +231,9 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 				// User wrote the full title explicitly — keep absolute style.
 				newTarget = toTitle;
 			} else {
-				// Try smart shortening for the target portion; fall back to
-				// the absolute new title.
-				newTarget = findShortestSelfRef(toTitle, sourceTitle, simWiki, {context: context}) || toTitle;
+				// Smart-replace the target portion; fall back to absolute.
+				var targetSegCount = rawTarget.split("/").length;
+				newTarget = findGoodSelfRef(toTitle, sourceTitle, simWiki, {context: context}, targetSegCount) || toTitle;
 			}
 			newText = "[[" + rawDisplay + "|" + newTarget + "]]";
 		} else if(ref === fromTitle) {
@@ -199,10 +243,11 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 			// Short ref still resolves correctly — leave alone.
 			return undefined;
 		} else {
-			// Try to find a new short form that resolves post-rename. If
+			// Try to find a new short form that resolves post-rename,
+			// preferring the same segment count as the original ref. If
 			// found, use it as both display and target. Else preserve the
 			// original display text via a labeled absolute pin.
-			var shortRef = findShortestSelfRef(toTitle, sourceTitle, simWiki, {context: context});
+			var shortRef = findGoodSelfRef(toTitle, sourceTitle, simWiki, {context: context}, refSegCount);
 			if(shortRef) {
 				if(shortRef === ref) { return undefined; }
 				newText = "[[" + shortRef + "]]";

@@ -4,6 +4,11 @@
             "file": "../../../../../tiddlers/_system/plugins/flibbles/relink.json",
             "isTiddlerFile": true,
             "fields": {}
+        },
+        {
+            "file": "../../../../../tiddlers/_system/plugins/flibbles/relink-titles.json",
+            "isTiddlerFile": true,
+            "fields": {}
         }
     ]
 }

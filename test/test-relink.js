@@ -249,6 +249,63 @@ describe("namespace: relink integration", function() {
 			expect(wiki.getTiddler("a/b/c").fields.text).toBe("[[e]]");
 		});
 
+		it("preserves segment-count when rewriting: [[b/c/d]] from a/b/c → [[f/c/d]] (rename a/b → a/f cascade)", function() {
+			// Source a/b/c references a deep descendant via 3-segment ref.
+			// User renames a/b → a/f, cascading to rename a/b/c → a/f/c and
+			// a/b/c/d → a/f/c/d. We expect the 3-segment ref to keep its
+			// 3-segment shape rather than collapse to [[d]].
+			var wiki = setupWithFlags([
+				{title: "a/b", text: ""},
+				{title: "a/b/c", text: "[[b/c/d]]"},
+				{title: "a/b/c/d", text: ""}
+			]);
+			function renameTiddler(from, to) {
+				wiki.relinkTiddler(from, to);
+				var t = wiki.getTiddler(from);
+				if(t) {
+					var fields = $tw.utils.extend({}, t.fields, {title: to});
+					wiki.deleteTiddler(from);
+					wiki.addTiddler(new $tw.Tiddler(fields));
+				}
+			}
+			// Cascade bottom-up: rename child first so its text gets a chance
+			// to be relinked while parents are still at their old titles.
+			renameTiddler("a/b/c/d", "a/f/c/d");
+			renameTiddler("a/b/c", "a/f/c");
+			renameTiddler("a/b", "a/f");
+			expect(wiki.getTiddler("a/f/c").fields.text).toBe("[[f/c/d]]");
+		});
+
+		it("user-reported flow: relinkTiddler with relink-titles cascade rewrites [[b/c/d]] → [[f/c/d]]", function() {
+			// Skip if relink-titles isn't actually wired up — copying its
+			// shadow tiddlers into a fresh wiki doesn't re-run the
+			// relinktitlesrule module registration.
+			var hasRelinkTitles = false;
+			if($tw.modules && $tw.modules.types && $tw.modules.types.relinktitlesrule) {
+				hasRelinkTitles = !!$tw.modules.types.relinktitlesrule[
+					"$:/plugins/flibbles/relink-titles/rules/directory"];
+			}
+			if(!hasRelinkTitles) { pending("relink-titles not loaded as a module"); return; }
+			var wiki = setupWithFlags([
+				{title: "a/b", text: ""},
+				{title: "a/b/c", text: "[[b/c/d]]"},
+				{title: "a/b/c/d", text: ""}
+			]);
+			// Rename the source itself + run relink (UI's typical flow).
+			var t = wiki.getTiddler("a/b");
+			wiki.deleteTiddler("a/b");
+			wiki.addTiddler(new $tw.Tiddler($tw.utils.extend({}, t.fields, {title: "a/f"})));
+			wiki.relinkTiddler("a/b", "a/f");
+			// relink-titles' directory rule cascades child renames within
+			// this single relinkTiddler call. By the time our rule fires
+			// on the nested rename of a/b/c/d, the original is already
+			// deleted — wrapWikiForPreRename keeps it visible to the
+			// resolver so the ref's resolution is detectable.
+			expect(wiki.getTiddler("a/f/c")).toBeDefined();
+			expect(wiki.getTiddler("a/f/c/d")).toBeDefined();
+			expect(wiki.getTiddler("a/f/c").fields.text).toBe("[[f/c/d]]");
+		});
+
 		it("handles batch rename of a subtree (knowledge/llm → knowledge/ai)", function() {
 			// Mirrors a relink-titles cascading rename. Each child is renamed
 			// individually: (1) update references, (2) move the tiddler.
