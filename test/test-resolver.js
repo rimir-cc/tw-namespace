@@ -17,6 +17,7 @@ describe("namespace: resolver", function() {
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var mounts = require("$:/plugins/rimir/namespace/mounts.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -32,6 +33,7 @@ describe("namespace: resolver", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		resolver.invalidatePseudoCache();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();
@@ -432,6 +434,225 @@ describe("namespace: resolver", function() {
 			var r = resolver.resolve("x", "$:/plugins/foo/bar", wiki);
 			expect(r.status).toBe("self");
 			expect(r.resolved).toBe("$:/plugins/foo/bar/x");
+		});
+
+	});
+
+	// ----------------------------------------------------------------------
+	// Scope gate — when scope-mode is "prefixes" the resolver short-circuits
+	// before any pipeline stage runs for sources outside the whitelist.
+	// ----------------------------------------------------------------------
+	describe("scope gate (resolver entry)", function() {
+
+		// Same as setupWiki but with scope mode "prefixes" + a single
+		// whitelisted prefix "knowledge". All other feature flags ON so we
+		// can verify each stage is properly bypassed.
+		function setupScopedWiki(tiddlers) {
+			var wiki = setupWiki(tiddlers);
+			// Self-prefix is OFF in setupWiki — turn it on so we can verify
+			// the gate bypasses self-prefix too.
+			wiki.addTiddler({title: "$:/config/rimir/namespace/self-prefix", text: "yes"});
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge"});
+			flags.invalidate();
+			scope.invalidate();
+			return wiki;
+		}
+
+		describe("OOS sources short-circuit before each pipeline stage", function() {
+
+			it("OOS source with literal-on-raw target → out-of-scope (NOT 'literal')", function() {
+				var wiki = setupScopedWiki([{title: "Foo", text: ""}]);
+				var r = resolver.resolve("Foo", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+				expect(r.resolved).toBeNull();
+			});
+
+			it("OOS source with alias defined → alias does NOT fire", function() {
+				var wiki = setupScopedWiki([
+					{title: "real/target", text: ""},
+					{title: "$:/a", tags: "$:/tags/NamespaceAlias", "short": "SHORT", "expands-to": "real/target"}
+				]);
+				var r = resolver.resolve("SHORT", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source with mount defined → mount does NOT fire", function() {
+				var wiki = setupScopedWiki([
+					{title: "physical/place", text: ""},
+					{title: "$:/m", tags: "$:/tags/NamespaceMount", "from": "logical", "to": "physical"}
+				]);
+				var r = resolver.resolve("logical/place", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source with pseudo segment in ref → pseudo NOT expanded", function() {
+				var wiki = setupScopedWiki([
+					{title: "v/3.0/x", text: ""},
+					{title: "v/4.0/x", text: ""}
+				]);
+				var r = resolver.resolve("v/_latest/x", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source with explicit context → context NOT applied", function() {
+				var wiki = setupScopedWiki([{title: "ctx/X", text: ""}]);
+				var r = resolver.resolve("X", "inbox/today", wiki, {context: "ctx"});
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source where walk-up would hit → walk-up NOT attempted", function() {
+				var wiki = setupScopedWiki([{title: "a/b/X", text: ""}]);
+				var r = resolver.resolve("X", "a/b/source", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source with self-prefix flag on → self-prefix NOT attempted", function() {
+				var wiki = setupScopedWiki([{title: "inbox/today/x", text: ""}]);
+				var r = resolver.resolve("x", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("OOS source with $:/ ref → out-of-scope (gate fires before $:/ short-circuit)", function() {
+				var wiki = setupScopedWiki([{title: "$:/plugins/foo", text: ""}]);
+				var r = resolver.resolve("$:/plugins/foo", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+		});
+
+		describe("in-scope sources behave exactly like global mode", function() {
+
+			it("walk-up still resolves from in-scope source", function() {
+				var wiki = setupScopedWiki([{title: "knowledge/llm/X", text: ""}]);
+				var r = resolver.resolve("X", "knowledge/llm/foo", wiki);
+				expect(r.status).toBe("walkup");
+				expect(r.resolved).toBe("knowledge/llm/X");
+			});
+
+			it("alias still rewrites for in-scope source", function() {
+				var wiki = setupScopedWiki([
+					{title: "knowledge/real", text: ""},
+					{title: "$:/a", tags: "$:/tags/NamespaceAlias", "short": "SHORT", "expands-to": "knowledge/real"}
+				]);
+				var r = resolver.resolve("SHORT", "knowledge/foo", wiki);
+				expect(r.status).toBe("alias");
+				expect(r.resolved).toBe("knowledge/real");
+			});
+
+			it("mount still applies for in-scope source", function() {
+				var wiki = setupScopedWiki([
+					{title: "knowledge/physical/x", text: ""},
+					{title: "$:/m", tags: "$:/tags/NamespaceMount", "from": "logical", "to": "knowledge/physical"}
+				]);
+				var r = resolver.resolve("logical/x", "knowledge/foo", wiki);
+				expect(r.status).toBe("mount");
+				expect(r.resolved).toBe("knowledge/physical/x");
+			});
+
+			it("pseudo still expands for in-scope source", function() {
+				var wiki = setupScopedWiki([
+					{title: "knowledge/v/3.0/x", text: ""},
+					{title: "knowledge/v/4.0/x", text: ""}
+				]);
+				var r = resolver.resolve("knowledge/v/_latest/x", "knowledge/foo", wiki);
+				expect(r.resolved).toBe("knowledge/v/4.0/x");
+			});
+
+			it("context still applies for in-scope source", function() {
+				var wiki = setupScopedWiki([{title: "knowledge/ctx/X", text: ""}]);
+				var r = resolver.resolve("X", "knowledge/foo", wiki, {context: "knowledge/ctx"});
+				expect(r.status).toBe("context");
+				expect(r.resolved).toBe("knowledge/ctx/X");
+			});
+
+			it("self-prefix still resolves descendants for in-scope source", function() {
+				var wiki = setupScopedWiki([{title: "knowledge/foo/yt/x", text: ""}]);
+				var r = resolver.resolve("yt/x", "knowledge/foo", wiki);
+				expect(r.status).toBe("self");
+				expect(r.resolved).toBe("knowledge/foo/yt/x");
+			});
+
+			it("literal on raw still wins for in-scope source", function() {
+				var wiki = setupScopedWiki([{title: "knowledge/foo", text: ""}]);
+				var r = resolver.resolve("knowledge/foo", "knowledge/llm/x", wiki);
+				expect(r.status).toBe("literal");
+			});
+
+		});
+
+		describe("boundary cases", function() {
+
+			it("source equal to whitelisted prefix exactly → in scope", function() {
+				var wiki = setupScopedWiki([{title: "knowledge/X", text: ""}]);
+				var r = resolver.resolve("X", "knowledge", wiki);
+				// Walk-up from "knowledge" goes to bare "X"; that doesn't exist,
+				// so unresolved — but importantly NOT out-of-scope.
+				expect(r.status).not.toBe("out-of-scope");
+			});
+
+			it("'knowledgeBase' source (no segment boundary) → OOS even with prefix 'knowledge'", function() {
+				var wiki = setupScopedWiki([{title: "knowledgeBase/X", text: ""}]);
+				var r = resolver.resolve("X", "knowledgeBase/foo", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("empty whitelist + prefixes mode → any source OOS", function() {
+				var wiki = setupWiki([{title: "knowledge/X", text: ""}]);
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: ""});
+				flags.invalidate();
+				scope.invalidate();
+				var r = resolver.resolve("X", "knowledge/foo", wiki);
+				expect(r.status).toBe("out-of-scope");
+			});
+
+			it("toggle global → prefixes(empty) at runtime takes effect after invalidate", function() {
+				var wiki = setupWiki([{title: "Foo", text: ""}]);
+				var r1 = resolver.resolve("Foo", "any/source", wiki);
+				expect(r1.status).toBe("literal");
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: ""});
+				scope.invalidate();
+				var r2 = resolver.resolve("Foo", "any/source", wiki);
+				expect(r2.status).toBe("out-of-scope");
+			});
+
+		});
+
+		describe("result shape contract", function() {
+
+			it("OOS result has status='out-of-scope', resolved=null, tried=[]", function() {
+				var wiki = setupScopedWiki([{title: "anywhere", text: ""}]);
+				var r = resolver.resolve("anywhere", "inbox/today", wiki);
+				expect(r.status).toBe("out-of-scope");
+				expect(r.resolved).toBeNull();
+				expect(r.tried).toEqual([]);
+			});
+
+		});
+
+		describe("trailing-slash tolerance in whitelisted prefix", function() {
+
+			// User-reported regression: with prefix "knowledge/" (trailing
+			// slash) and source "knowledge/a/b/c/d", `[[a/b/c]]` failed to
+			// resolve because the boundary check appended a second "/" and
+			// looked for "knowledge//...". scope.js now strips trailing
+			// slashes per prefix line.
+			it("source under 'knowledge/'-with-slash is in scope; walk-up resolves [[a/b/c]] from knowledge/a/b/c/d", function() {
+				var wiki = setupWiki([
+					{title: "knowledge/a/b/c", text: ""},
+					{title: "knowledge/a/b/c/d", text: ""}
+				]);
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge/"});
+				flags.invalidate();
+				scope.invalidate();
+				var r = resolver.resolve("a/b/c", "knowledge/a/b/c/d", wiki);
+				expect(r.status).toBe("walkup");
+				expect(r.resolved).toBe("knowledge/a/b/c");
+			});
+
 		});
 
 	});

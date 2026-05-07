@@ -24,6 +24,7 @@ describe("namespace: walk-up under transclusion (regression)", function() {
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var mounts = require("$:/plugins/rimir/namespace/mounts.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -38,6 +39,7 @@ describe("namespace: walk-up under transclusion (regression)", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		resolver.invalidatePseudoCache();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();

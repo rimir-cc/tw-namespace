@@ -216,6 +216,25 @@ exports.relink = function(text, fromTitle, toTitle, options) {
 		// fires) still see the original target.
 		var preWiki = wrapWikiForPreRename(wiki, fromTitle);
 		var current = resolver.resolve(ref, sourceTitle, preWiki, {context: context});
+		if(current.status === "out-of-scope") {
+			// Source is outside the namespace whitelist — namespace machinery
+			// (walk-up, context, alias, mount, pseudo, self-prefix) doesn't
+			// apply. But absolute-title refs are still text matches that the
+			// rename should fix; flibbles' built-in prettylink rule would
+			// otherwise be eclipsed by ours since both share the same regex.
+			// Handle the absolute-title cases here and defer everything else.
+			if(rawTarget !== undefined) {
+				if(rawTarget === fromTitle) {
+					entry = {output: "[[" + rawDisplay + "|" + toTitle + "]]"};
+				}
+			} else if(ref === fromTitle) {
+				entry = {output: "[[" + toTitle + "]]"};
+			}
+			// Short refs from OOS sources can't have resolved to fromTitle by
+			// namespace logic (the resolver would have returned out-of-scope),
+			// and can't be rewritten as literal text either, so leave alone.
+			return entry;
+		}
 		if(current.resolved !== fromTitle) { return undefined; }
 
 		// Will the same ref still resolve to toTitle after the rename?

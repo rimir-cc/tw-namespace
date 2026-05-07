@@ -5,6 +5,28 @@ caption: settings
 
 ! Namespace — settings & diagnostics
 
+!! Scope
+
+Restrict namespace behavior to tiddlers whose title starts with one of a
+configured set of prefixes. Outside those prefixes, `[[ref]]` renders as a
+plain TW link — references into namespace areas from there must be fully
+qualified by design. Default is //Global// (every tiddler subject to namespace
+behavior — same as before this setting existed).
+
+<$radio tiddler="$:/config/rimir/namespace/scope-mode" value="global"> ''Global'' — apply namespace behavior to all tiddlers</$radio>
+
+<$radio tiddler="$:/config/rimir/namespace/scope-mode" value="prefixes"> ''Restricted'' — only the prefixes listed below</$radio>
+
+<$reveal type="match" state="$:/config/rimir/namespace/scope-mode" text="prefixes">
+One prefix per line. The match is segment-boundary literal: prefix
+`knowledge` covers exactly `knowledge` and `knowledge/...`, but NOT
+`knowledgeBase/...`. Whitespace and blank lines are tolerated.
+
+<$edit-text tiddler="$:/config/rimir/namespace/scope-prefixes" tag="textarea" rows="4" placeholder="add your prefixes here, one per line"/>
+</$reveal>
+
+---
+
 !! Feature flags
 
 Each feature is off by default. Toggle to enable.

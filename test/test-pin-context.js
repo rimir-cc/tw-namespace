@@ -17,6 +17,7 @@ describe("namespace: ns-pin-context filter", function() {
 	var filterModule = require("$:/plugins/rimir/namespace/filter.js");
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -28,6 +29,7 @@ describe("namespace: ns-pin-context filter", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		resolver.invalidatePseudoCache();
 	});
 

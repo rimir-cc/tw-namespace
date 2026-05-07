@@ -15,6 +15,7 @@ describe("namespace: _latest pseudo", function() {
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var latest = require("$:/plugins/rimir/namespace/pseudo/_latest.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -26,6 +27,7 @@ describe("namespace: _latest pseudo", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		resolver.invalidatePseudoCache();
 	});
 

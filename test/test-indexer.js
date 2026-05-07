@@ -18,6 +18,7 @@ describe("namespace: indexer", function() {
 	var mounts = require("$:/plugins/rimir/namespace/mounts.js");
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -32,6 +33,7 @@ describe("namespace: indexer", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		indexer.reset();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();
@@ -176,6 +178,95 @@ describe("namespace: indexer", function() {
 		]);
 		indexer.rebuildAll(wiki);
 		expect(indexer.getBacklinks("T").sort()).toEqual(["s1", "s2", "s3"]);
+	});
+
+	// ----------------------------------------------------------------------
+	// Scope mode — OOS sources should produce no edges (their refs only
+	// resolve via TW core, which has its own backlinks tracking).
+	// ----------------------------------------------------------------------
+	describe("scope mode (prefixes)", function() {
+
+		function setupScopedWiki(tiddlers) {
+			var wiki = setupWiki(tiddlers);
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge"});
+			flags.invalidate();
+			scope.invalidate();
+			return wiki;
+		}
+
+		it("OOS source with [[ref]] adds NO forward edges", function() {
+			var wiki = setupScopedWiki([
+				{title: "knowledge/foo", text: ""},
+				{title: "inbox/today", text: "see [[knowledge/foo]] and [[bar]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			expect(indexer.getForwardLinks("inbox/today")).toEqual([]);
+			expect(indexer.getBacklinks("knowledge/foo")).toEqual([]);
+		});
+
+		it("in-scope source still indexes refs to in-scope targets", function() {
+			var wiki = setupScopedWiki([
+				{title: "knowledge/foo", text: ""},
+				{title: "knowledge/bar", text: "see [[foo]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			// walk-up from "knowledge/bar" finds "knowledge/foo"
+			expect(indexer.getBacklinks("knowledge/foo")).toEqual(["knowledge/bar"]);
+		});
+
+		it("in-scope source can reference an OOS-titled target (target scope is irrelevant)", function() {
+			var wiki = setupScopedWiki([
+				{title: "inbox/somewhere", text: ""},
+				{title: "knowledge/foo", text: "see [[inbox/somewhere]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			// "inbox/somewhere" exists as a literal title; from in-scope source
+			// the resolver Stage 1 hits it. Forward edge added.
+			expect(indexer.getBacklinks("inbox/somewhere")).toEqual(["knowledge/foo"]);
+		});
+
+		it("OOS source after toggling scope back to global picks up edges on reindex", function() {
+			var wiki = setupScopedWiki([
+				{title: "T", text: ""},
+				{title: "inbox/today", text: "see [[T]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			expect(indexer.getBacklinks("T")).toEqual([]);
+			// Switch to global
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "global"});
+			scope.invalidate();
+			indexer.rebuildAll(wiki);
+			expect(indexer.getBacklinks("T")).toEqual(["inbox/today"]);
+		});
+
+		it("incremental reindex of an OOS source clears its prior edges", function() {
+			// Start in global mode so the source initially has edges, then
+			// switch to prefixes mode that excludes it and reindex.
+			var wiki = setupWiki([
+				{title: "knowledge/T", text: ""},
+				{title: "inbox/today", text: "see [[knowledge/T]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			expect(indexer.getBacklinks("knowledge/T")).toEqual(["inbox/today"]);
+			// Switch to prefixes-mode w/ "knowledge"; inbox/today is now OOS.
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge"});
+			scope.invalidate();
+			indexer.reindex("inbox/today", wiki);
+			expect(indexer.getBacklinks("knowledge/T")).toEqual([]);
+		});
+
+		it("rebuildAll mixed wiki: in-scope sources indexed, OOS sources skipped", function() {
+			var wiki = setupScopedWiki([
+				{title: "knowledge/T", text: ""},
+				{title: "knowledge/src1", text: "see [[T]]"},
+				{title: "inbox/src2", text: "see [[knowledge/T]]"}
+			]);
+			indexer.rebuildAll(wiki);
+			expect(indexer.getBacklinks("knowledge/T")).toEqual(["knowledge/src1"]);
+		});
+
 	});
 
 });

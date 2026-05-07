@@ -21,6 +21,11 @@ for live, in-plugin demos of every feature described below.
 A link {{{ [[REF]] }}} is resolved in this order. Stages marked ☐ are
 off by default and activated via feature flags in settings.
 
+# ''Scope gate'' — when ''Restricted'' scope is active and the source
+  tiddler is outside the whitelisted prefixes, the resolver returns
+  `out-of-scope` immediately and the link renders as vanilla TW. See
+  the //Scope// section below. Default mode //Global// makes this a
+  no-op so the rest of the pipeline runs as before.
 # ''Literal on raw REF'' — a real tiddler always beats an alias or
   pseudo expansion. Avoids silent redirection if a tiddler and an alias
   share a name.
@@ -48,6 +53,29 @@ off by default and activated via feature flags in settings.
   `a/b/REF`, `a/REF`, `REF`. First hit wins.
 # ''Unresolved'' — rendered with the `ns-unresolved` class
   (wavy underline + ⚠ marker).
+
+!! Scope
+
+By default, the plugin operates on every tiddler in the wiki (//Global//
+mode). For users who only want namespace behavior in a specific area
+(e.g. `knowledge/...`), the [[settings tab|$:/plugins/rimir/namespace/settings]]
+exposes a ''Restricted'' mode with a list of whitelisted title prefixes
+(one per line, segment-boundary literal match — `knowledge` covers
+`knowledge` and `knowledge/...` but not `knowledgeBase/...`. Trailing
+slashes are tolerated, so `knowledge/` works identically.)
+
+Outside the whitelist, `[[REF]]` renders as a vanilla TW link — no
+walk-up, context, alias, mount, pseudo, or self-prefix. References
+into namespace areas from outside MUST be fully qualified by design;
+this is what gives the namespace its encapsulation guarantee. The
+backlinks indexer also skips out-of-scope sources. The relink rule
+still rewrites absolute-title refs in OOS sources (a pure text match,
+preserves rename correctness) but defers the resolver-driven branches.
+
+Config tiddlers (live, no restart):
+
+* `$:/config/rimir/namespace/scope-mode` — `global` (default) or `prefixes`
+* `$:/config/rimir/namespace/scope-prefixes` — newline-separated list
 
 !! Feature flags
 

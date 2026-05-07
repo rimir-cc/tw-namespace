@@ -15,6 +15,7 @@ describe("namespace: aliases", function() {
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 	var resolver = require("$:/plugins/rimir/namespace/resolver.js");
 	var flags = require("$:/plugins/rimir/namespace/featureflags.js");
+	var scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -27,6 +28,7 @@ describe("namespace: aliases", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		aliases.invalidateAliases();
 		resolver.invalidatePseudoCache();
 	});

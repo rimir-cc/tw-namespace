@@ -26,6 +26,7 @@ var aliases  = require("$:/plugins/rimir/namespace/aliases.js");
 var mounts   = require("$:/plugins/rimir/namespace/mounts.js");
 var indexer  = require("$:/plugins/rimir/namespace/indexer.js");
 var flags    = require("$:/plugins/rimir/namespace/featureflags.js");
+var scope    = require("$:/plugins/rimir/namespace/scope.js");
 
 exports.name = "rimir-namespace-cache-invalidation";
 exports.platforms = ["browser", "node"];
@@ -39,6 +40,12 @@ exports.startup = function() {
 		var configChanged = flags.isConfigChange(changes);
 		if(configChanged) {
 			flags.invalidate();
+		}
+		// Same for scope config: invalidate cache and force a full backlinks
+		// rebuild so the indexer drops/adds edges per the new scope.
+		if(scope.isConfigChange(changes)) {
+			scope.invalidate();
+			configChanged = true;
 		}
 		// Alias cache: only invalidate when aliases are enabled.
 		if(flags.isEnabled("aliases", $tw.wiki)) {

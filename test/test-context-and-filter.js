@@ -61,7 +61,8 @@ describe("namespace: ns-resolve filter operator", function() {
 	var aliases = require("$:/plugins/rimir/namespace/aliases.js"),
 		mounts = require("$:/plugins/rimir/namespace/mounts.js"),
 		resolver = require("$:/plugins/rimir/namespace/resolver.js"),
-		flags = require("$:/plugins/rimir/namespace/featureflags.js");
+		flags = require("$:/plugins/rimir/namespace/featureflags.js"),
+		scope = require("$:/plugins/rimir/namespace/scope.js");
 
 	function setupWiki(tiddlers) {
 		var wiki = new $tw.Wiki();
@@ -75,6 +76,7 @@ describe("namespace: ns-resolve filter operator", function() {
 
 	beforeEach(function() {
 		flags.invalidate();
+		scope.invalidate();
 		resolver.invalidatePseudoCache();
 		aliases.invalidateAliases();
 		mounts.invalidateMounts();
@@ -161,6 +163,89 @@ describe("namespace: ns-resolve filter operator", function() {
 			var wiki = setupWiki([{title: "a/b/X", text: ""}]);
 			var r = wiki.filterTiddlers("[[X]ns-resolve-class[a/b/src]]");
 			expect(r).toEqual(["tc-tiddlylink ns-resolved"]);
+		});
+
+	});
+
+	// --------------------------------------------------------------------
+	// Scope-mode interactions with the filter operators.
+	// --------------------------------------------------------------------
+	describe("scope mode (prefixes)", function() {
+
+		function setupScopedWiki(tiddlers) {
+			var wiki = setupWiki(tiddlers);
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+			wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge"});
+			flags.invalidate();
+			scope.invalidate();
+			return wiki;
+		}
+
+		it("ns-resolve from OOS source returns the raw ref unchanged (target exists)", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/foo", text: ""}]);
+			var r = wiki.filterTiddlers("[[knowledge/foo]ns-resolve[inbox/today]]");
+			expect(r).toEqual(["knowledge/foo"]);
+		});
+
+		it("ns-resolve from OOS source returns the raw ref unchanged (target missing)", function() {
+			var wiki = setupScopedWiki([]);
+			var r = wiki.filterTiddlers("[[knowledge/missing]ns-resolve[inbox/today]]");
+			expect(r).toEqual(["knowledge/missing"]);
+		});
+
+		it("ns-resolve-class from OOS source returns 'tc-tiddlylink' (no namespace classes)", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/foo", text: ""}]);
+			var r = wiki.filterTiddlers("[[knowledge/foo]ns-resolve-class[inbox/today]]");
+			expect(r).toEqual(["tc-tiddlylink"]);
+		});
+
+		it("ns-resolve-class from OOS source + missing target → still 'tc-tiddlylink' (no ns-unresolved)", function() {
+			var wiki = setupScopedWiki([]);
+			var r = wiki.filterTiddlers("[[knowledge/missing]ns-resolve-class[inbox/today]]");
+			expect(r).toEqual(["tc-tiddlylink"]);
+		});
+
+		it("in-scope source still gets ns-resolved styling", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/X", text: ""}]);
+			var r = wiki.filterTiddlers("[[X]ns-resolve-class[knowledge/foo]]");
+			expect(r).toEqual(["tc-tiddlylink ns-resolved"]);
+		});
+
+		it("in-scope source still walks up", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/X", text: ""}]);
+			var r = wiki.filterTiddlers("[[X]ns-resolve[knowledge/foo]]");
+			expect(r).toEqual(["knowledge/X"]);
+		});
+
+		it("\\context pragma sets ns-context but resolver still returns out-of-scope from OOS source", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/llm/X", text: ""}]);
+			// Render an OOS tiddler with \context pragma; the ns-resolve call
+			// inside should yield the raw ref (because OOS), not "knowledge/llm/X".
+			wiki.addTiddler({
+				title: "inbox/today",
+				text: "\\context knowledge/llm\n\n<$text text={{{ [[X]ns-resolve[inbox/today]] }}}/>"
+			});
+			var widget = wiki.makeTranscludeWidget("inbox/today",
+				{parseAsInline: false, document: $tw.fakeDocument});
+			var container = $tw.fakeDocument.createElement("div");
+			widget.render(container, null);
+			expect(container.textContent).toContain("X");
+			expect(container.textContent).not.toContain("knowledge/llm/X");
+		});
+
+		it("<$context> widget wrapping in OOS source — same: variable set but resolver short-circuits", function() {
+			var wiki = setupScopedWiki([{title: "knowledge/ctx/X", text: ""}]);
+			wiki.addTiddler({
+				title: "inbox/today",
+				text: "<$context prefix=\"knowledge/ctx\">\n\n" +
+					"<$text text={{{ [[X]ns-resolve[inbox/today]] }}}/>\n\n" +
+					"</$context>"
+			});
+			var widget = wiki.makeTranscludeWidget("inbox/today",
+				{parseAsInline: false, document: $tw.fakeDocument});
+			var container = $tw.fakeDocument.createElement("div");
+			widget.render(container, null);
+			expect(container.textContent).not.toContain("knowledge/ctx/X");
 		});
 
 	});

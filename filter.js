@@ -72,7 +72,11 @@ exports["ns-resolve-class"] = function(source, operator, options) {
 		results = [];
 	source(function(tiddler, title) {
 		var r = resolver.resolve(title, sourceTitle, options.wiki, {context: context});
-		if(r.status === "unresolved") {
+		if(r.status === "out-of-scope") {
+			// Vanilla TW link — no namespace styling. <$link> still adds its
+			// own tc-tiddlylink-resolves / tc-tiddlylink-missing for existence.
+			results.push("tc-tiddlylink");
+		} else if(r.status === "unresolved") {
 			results.push("tc-tiddlylink ns-unresolved");
 		} else {
 			results.push("tc-tiddlylink ns-resolved");

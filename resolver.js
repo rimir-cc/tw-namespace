@@ -7,6 +7,11 @@ Pure resolver for namespace-aware link references.
 
 Resolution pipeline for a reference REF looked up from source tiddler SRC:
 
+  0. Scope gate     — if configured scope mode is "prefixes" and SRC is not
+                      under one of the whitelisted prefixes, return
+                      "out-of-scope" immediately. Default mode is "global"
+                      (gate constant-true) so this is a no-op for unchanged
+                      installs. See scope.js.
   1. Literal on raw  — REF as typed exists as-is. A real tiddler always
                       beats an alias/mount to avoid silent redirection.
   2. Alias rewrite  — [optional] exact or pattern alias rewrites REF.
@@ -228,6 +233,7 @@ exports.expandPseudoSegments = function(ref, wiki) {
 var aliases = require("$:/plugins/rimir/namespace/aliases.js");
 var mounts  = require("$:/plugins/rimir/namespace/mounts.js");
 var flags   = require("$:/plugins/rimir/namespace/featureflags.js");
+var scope   = require("$:/plugins/rimir/namespace/scope.js");
 
 var ALIAS_MAX_HOPS = 3;
 
@@ -244,15 +250,27 @@ options:     optional; {context: "<prefix>"} to supply a declared context
 
 Returns: {status, resolved, tried}
   status:   "literal" | "alias" | "mount" | "absolute" | "context" |
-            "self" | "walkup" | "unresolved"
+            "self" | "walkup" | "unresolved" | "out-of-scope"
   resolved: resolved title or null
   tried:    ordered array of every title we checked (useful for tooltips)
+
+Scope gate: if the configured scope mode is "prefixes" and the source
+tiddler's title doesn't start (at a segment boundary) with one of the
+whitelisted prefixes, the resolver returns "out-of-scope" immediately.
+This is checked before any other stage, so OOS sources bypass aliases,
+mounts, pseudos, context, self-prefix, and walk-up entirely. Callers
+either treat the empty resolution as a vanilla TW link (filter operators)
+or skip the work (indexer, relink rules). See scope.js.
 */
 exports.resolve = function(ref, sourceTitle, wiki, options) {
 	options = options || {};
 	var tried = [];
 	if(!ref) {
 		return {status: "unresolved", resolved: null, tried: tried};
+	}
+	// Scope gate — see scope.js. In "global" mode this is a constant true.
+	if(!scope.isInScope(sourceTitle, wiki)) {
+		return {status: "out-of-scope", resolved: null, tried: tried};
 	}
 	// 1. Literal on raw ref — a real tiddler always beats an alias/mount.
 	tried.push(ref);

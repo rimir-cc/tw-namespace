@@ -362,6 +362,126 @@ describe("namespace: relink integration", function() {
 				.toBe("[[click here|bar2]]");
 		});
 
+		// ----------------------------------------------------------------
+		// Scope mode — when scope-mode is "prefixes", OOS sources are NOT
+		// rewritten by our namespace relink rule. (flibbles' core relinker
+		// would still rewrite literal-title refs there in real use, but the
+		// namespace rule itself must skip.)
+		// ----------------------------------------------------------------
+		describe("scope mode (prefixes)", function() {
+
+			var scope = require("$:/plugins/rimir/namespace/scope.js");
+
+			function setupScoped(tiddlers, opts) {
+				var wiki = setupWithFlags(tiddlers, opts);
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-mode", text: "prefixes"});
+				wiki.addTiddler({title: "$:/config/rimir/namespace/scope-prefixes", text: "knowledge"});
+				scope.invalidate();
+				return wiki;
+			}
+
+			afterEach(function() {
+				// Restore global mode for subsequent describe blocks /
+				// existing relink specs that don't expect scope active.
+				scope.invalidate();
+			});
+
+			it("OOS source: short ref that needs walk-up is left alone (no namespace magic)", function() {
+				// In an OOS source, walk-up doesn't apply — `[[bar]]` doesn't
+				// resolve to `knowledge/llm/bar` from `inbox/today`. Renaming
+				// `knowledge/llm/bar` therefore does NOT touch the short ref.
+				var wiki = setupScoped([
+					{title: "inbox/today", text: "see [[bar]]"},
+					{title: "knowledge/llm/bar", text: ""}
+				]);
+				wiki.relinkTiddler("knowledge/llm/bar", "knowledge/ai/bar");
+				expect(wiki.getTiddler("inbox/today").fields.text)
+					.toBe("see [[bar]]");
+			});
+
+			it("OOS source: absolute-title ref IS rewritten (text match, no resolver needed)", function() {
+				// Absolute-title rewrites are pure text replacements — we still
+				// do them in OOS sources so the rename doesn't break the link.
+				// (Without this, flibbles' built-in rule would otherwise handle
+				// it, but rule iteration only fires one rule per match.)
+				var wiki = setupScoped([
+					{title: "inbox/today", text: "see [[knowledge/llm/foo]]"},
+					{title: "knowledge/llm/foo", text: ""}
+				]);
+				wiki.relinkTiddler("knowledge/llm/foo", "knowledge/ai/foo");
+				expect(wiki.getTiddler("inbox/today").fields.text)
+					.toBe("see [[knowledge/ai/foo]]");
+			});
+
+			it("OOS source: [[label|absolute]] target IS rewritten, label preserved", function() {
+				var wiki = setupScoped([
+					{title: "inbox/today", text: "[[click here|knowledge/llm/foo]]"},
+					{title: "knowledge/llm/foo", text: ""}
+				]);
+				wiki.relinkTiddler("knowledge/llm/foo", "knowledge/ai/foo");
+				expect(wiki.getTiddler("inbox/today").fields.text)
+					.toBe("[[click here|knowledge/ai/foo]]");
+			});
+
+			it("in-scope source still gets short-form rewrite (regression)", function() {
+				var wiki = setupScoped([
+					{title: "knowledge/llm/src", text: "see [[bar]]"},
+					{title: "knowledge/llm/bar", text: ""}
+				]);
+				wiki.relinkTiddler("knowledge/llm/bar", "knowledge/ai/bar");
+				// In-scope source: namespace rule rewrites short ref via walk-up.
+				expect(wiki.getTiddler("knowledge/llm/src").fields.text)
+					.toBe("see [[ai/bar]]");
+			});
+
+			it("in-scope source referencing OOS-titled target — still rewritten on rename", function() {
+				// Source is in scope; target's title is outside any whitelist
+				// but exists. Our rule should still pick this up because the
+				// gate keys on source scope, not target scope.
+				var wiki = setupScoped([
+					{title: "knowledge/llm/src", text: "see [[inbox/old]]"},
+					{title: "inbox/old", text: ""}
+				]);
+				wiki.relinkTiddler("inbox/old", "inbox/new");
+				expect(wiki.getTiddler("knowledge/llm/src").fields.text)
+					.toBe("see [[inbox/new]]");
+			});
+
+			it("global mode + same scenario: all rewrites happen as before", function() {
+				// Regression: with no scope tiddlers (global default), the
+				// short-form ref in an "OOS-by-name" source DOES get rewritten
+				// because namespace machinery applies everywhere.
+				var wiki = setupWithFlags([
+					{title: "inbox/today", text: "see [[bar]]"},
+					{title: "knowledge/llm/bar", text: ""}
+				]);
+				// "[[bar]]" from "inbox/today" doesn't resolve via walk-up
+				// (bar isn't under inbox), so resolver returns unresolved →
+				// namespace rule doesn't touch it. Behavior unchanged.
+				wiki.relinkTiddler("knowledge/llm/bar", "knowledge/ai/bar");
+				expect(wiki.getTiddler("inbox/today").fields.text)
+					.toBe("see [[bar]]");
+			});
+
+			it("\\context pragma in OOS source: title-handler still rewrites the prefix", function() {
+				// The pragma's title is "knowledge/llm" — flibbles' core
+				// title handler still rewrites it (it's a registered attribute
+				// type), but our namespace-context rule's resolver-driven path
+				// would skip OOS sources. End-state: pragma is rewritten by
+				// the title handler, so the test confirms no regression.
+				var wiki = setupScoped([
+					{title: "inbox/today", text: "\\context knowledge/llm\nbody"},
+					{title: "knowledge/llm", text: ""}
+				]);
+				wiki.relinkTiddler("knowledge/llm", "knowledge/ai");
+				// flibbles' title relink still fires for the pragma's prefix
+				// attribute regardless of source scope, as designed.
+				expect(wiki.getTiddler("inbox/today").fields.text)
+					.toBe("\\context knowledge/ai\nbody");
+			});
+
+		});
+
 	});
 
 });
