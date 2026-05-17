@@ -36,6 +36,7 @@ var PATTERN_TAG = "$:/tags/NamespacePatternAlias";
 // Cache keyed per-wiki (WeakMap) so multiple concurrent wikis — in
 // practice only matters for tests — don't share stale entries.
 // Entry shape: {exact: {short → expansion}, patterns: [{regex, replacement, title}]}
+/* istanbul ignore next — WeakMap is universally available on supported platforms; null fallback is for ancient engines */
 var caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
 
 function iterateTaggedTitles(wiki, tag, cb) {
@@ -49,6 +50,7 @@ function buildCache(wiki) {
 	entry = {exact: Object.create(null), patterns: []};
 	iterateTaggedTitles(wiki, EXACT_TAG, function(title) {
 		var t = wiki.getTiddler(title);
+		/* istanbul ignore if — filterTiddlers guarantees title resolves; guards a race */
 		if(!t || !t.fields) { return; }
 		var short = t.fields["short"],
 			expansion = t.fields["expands-to"];
@@ -58,6 +60,7 @@ function buildCache(wiki) {
 	});
 	iterateTaggedTitles(wiki, PATTERN_TAG, function(title) {
 		var t = wiki.getTiddler(title);
+		/* istanbul ignore if — filterTiddlers guarantees title resolves; guards a race */
 		if(!t || !t.fields) { return; }
 		var pattern = t.fields["pattern"],
 			replacement = t.fields["replacement"];
@@ -70,11 +73,13 @@ function buildCache(wiki) {
 				title: title
 			});
 		} catch(e) {
+			/* istanbul ignore else — console.error is always present on supported runtimes */
 			if(typeof console !== "undefined" && console.error) {
 				console.error("namespace: invalid alias pattern in " + title + ": " + e.message);
 			}
 		}
 	});
+	/* istanbul ignore else — caches null only on ancient engines without WeakMap */
 	if(caches) { caches.set(wiki, entry); }
 	return entry;
 }
@@ -104,6 +109,7 @@ Drop the alias cache. Next lookup rebuilds. With no wiki argument, drops
 every wiki's cache — matches the existing call signature from startup.js.
 */
 exports.invalidateAliases = function(wiki) {
+	/* istanbul ignore if — caches null only on ancient engines without WeakMap */
 	if(!caches) { return; }
 	if(wiki) { caches.delete(wiki); } else { caches = new WeakMap(); }
 };

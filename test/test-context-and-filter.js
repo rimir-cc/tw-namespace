@@ -54,6 +54,53 @@ describe("namespace: $context widget", function() {
 		expect(text.trim()).toBe("");
 	});
 
+	it("renders children but does not set ns-context when prefix is empty", function() {
+		// `<$context prefix="">` is a documented no-op shell — useful in templates
+		// where the prefix is computed and may legitimately be empty.
+		var wiki = setupWiki();
+		var text = renderText(wiki, "<$context prefix=\"\">\n\n<$text text=<<ns-context>>/>\n\n</$context>");
+		expect(text.trim()).toBe("");
+	});
+
+	it("re-applies a new prefix when a driving tiddler changes (refresh path)", function() {
+		// $context wraps prefix-driven children; when the tiddler providing the
+		// prefix changes, refresh() must re-execute so the variable is re-bound.
+		var wiki = setupWiki([{title: "src", text: "first"}]);
+		wiki.addTiddler({title: "renderme",
+			text: "<$context prefix={{src}}>\n\n<$text text=<<ns-context>>/>\n\n</$context>"});
+		var widget = wiki.makeTranscludeWidget("renderme",
+			{parseAsInline: false, document: $tw.fakeDocument});
+		var container = $tw.fakeDocument.createElement("div");
+		widget.render(container, null);
+		expect(container.textContent).toContain("first");
+
+		wiki.addTiddler({title: "src", text: "second"});
+		widget.refresh({src: true});
+		expect(container.textContent).toContain("second");
+	});
+
+	it("delegates to children-refresh when own attributes are unchanged", function() {
+		// When the $context's prefix attribute does NOT change but the subtree
+		// references a tiddler that does, refresh() should fall through to
+		// refreshChildren so the children re-render normally.
+		var wiki = setupWiki([{title: "inner", text: "v1"}]);
+		wiki.addTiddler({title: "renderme",
+			text: "<$context prefix=\"static\">\n\n<<ns-context>> <$transclude tiddler=\"inner\" mode=\"inline\"/>\n\n</$context>"});
+		var widget = wiki.makeTranscludeWidget("renderme",
+			{parseAsInline: false, document: $tw.fakeDocument});
+		var container = $tw.fakeDocument.createElement("div");
+		widget.render(container, null);
+		expect(container.textContent).toContain("static");
+		expect(container.textContent).toContain("v1");
+
+		wiki.addTiddler({title: "inner", text: "v2"});
+		var result = widget.refresh({inner: true});
+		// refresh should propagate the children-change signal upward.
+		expect(typeof result).toBe("boolean");
+		expect(container.textContent).toContain("v2");
+		expect(container.textContent).toContain("static");
+	});
+
 });
 
 describe("namespace: ns-resolve filter operator", function() {

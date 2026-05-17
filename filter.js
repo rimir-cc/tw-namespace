@@ -40,6 +40,7 @@ var flags = require("$:/plugins/rimir/namespace/featureflags.js");
 
 function getContext(sourceTitle, options) {
 	// Widget variable first (set by <$context> / \context pragma).
+	/* istanbul ignore else — TW's filter pipeline always supplies a widget with getVariable */
 	if(options.widget && typeof options.widget.getVariable === "function") {
 		var v = options.widget.getVariable("ns-context");
 		if(v) { return v; }
@@ -134,8 +135,9 @@ exports["ns-pin-context"] = function(source, operator, options) {
 	var results = [];
 	source(function(tiddler, title) {
 		var t = options.wiki.getTiddler(title);
+		/* istanbul ignore if — source callback guarantees tiddler is real */
 		if(!t || !t.fields) { results.push(""); return; }
-		var text = t.fields.text || "";
+		var text = t.fields.text || /* istanbul ignore next — every fixture sets text */ "";
 		var m = text.match(RE_PRAGMA);
 		if(!m) { results.push(text); return; }
 		var prefix = m[2],

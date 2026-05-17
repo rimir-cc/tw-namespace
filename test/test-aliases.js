@@ -97,6 +97,27 @@ describe("namespace: aliases", function() {
 			expect(errSpy).toHaveBeenCalled();
 		});
 
+		it("skips a pattern alias that's missing the `pattern` field", function() {
+			// Author may have tagged a tiddler but forgotten to set pattern.
+			// The plugin should not crash; valid siblings still work.
+			var wiki = setupWiki([
+				{title: "$:/missing-pattern", tags: "$:/tags/NamespacePatternAlias", replacement: "wherever"},
+				{title: "$:/ok", tags: "$:/tags/NamespacePatternAlias", pattern: "^X$", replacement: "y"}
+			]);
+			expect(aliases.resolveAlias("X", wiki)).toBe("y");
+			expect(aliases.resolveAlias("anything", wiki)).toBeNull();
+		});
+
+		it("skips a pattern alias that's missing the `replacement` field", function() {
+			// Mirror of the previous case: pattern set, replacement absent.
+			var wiki = setupWiki([
+				{title: "$:/missing-replacement", tags: "$:/tags/NamespacePatternAlias", pattern: "^X$"},
+				{title: "$:/ok", tags: "$:/tags/NamespacePatternAlias", pattern: "^Y$", replacement: "z"}
+			]);
+			expect(aliases.resolveAlias("X", wiki)).toBeNull();
+			expect(aliases.resolveAlias("Y", wiki)).toBe("z");
+		});
+
 	});
 
 	describe("precedence: exact > pattern", function() {
@@ -153,6 +174,32 @@ describe("namespace: aliases", function() {
 			var r = resolver.resolve("SHORT", null, wiki);
 			expect(r.status).toBe("alias");
 			expect(r.resolved).toBe("v/4.0/x");
+		});
+
+	});
+
+	describe("cache invalidation", function() {
+
+		it("invalidateAliases(wiki) drops only that wiki's cache", function() {
+			// Per-wiki invalidation is the contract used by startup.js's
+			// change listener; verifying it here keeps that promise honest
+			// across plugin refactors.
+			var wikiA = setupWiki([
+				{title: "$:/a", tags: "$:/tags/NamespaceAlias", "short": "X", "expands-to": "alpha"}
+			]);
+			var wikiB = setupWiki([
+				{title: "$:/b", tags: "$:/tags/NamespaceAlias", "short": "X", "expands-to": "beta"}
+			]);
+			// Prime both caches
+			expect(aliases.resolveAlias("X", wikiA)).toBe("alpha");
+			expect(aliases.resolveAlias("X", wikiB)).toBe("beta");
+			// Change wikiA's alias content
+			wikiA.addTiddler({title: "$:/a", tags: "$:/tags/NamespaceAlias", "short": "X", "expands-to": "alpha-v2"});
+			// Without invalidation we'd see the cached "alpha"
+			aliases.invalidateAliases(wikiA);
+			expect(aliases.resolveAlias("X", wikiA)).toBe("alpha-v2");
+			// wikiB's cache is untouched (entry still says "beta")
+			expect(aliases.resolveAlias("X", wikiB)).toBe("beta");
 		});
 
 	});

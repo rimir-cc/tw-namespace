@@ -89,6 +89,30 @@ describe("namespace: _latest pseudo", function() {
 			expect(latest.resolve("", setupWiki([]))).toBeNull();
 		});
 
+		it("picks the highest among multiple prereleases of the same version", function() {
+			// All three are prereleases under the same base; comparison falls
+			// through to the prerelease-tag lex comparison.
+			var wiki = setupWiki([
+				{title: "v/3.0-beta/x",  text: ""},
+				{title: "v/3.0-rc.1/x",  text: ""},
+				{title: "v/3.0-rc.2/x",  text: ""}
+			]);
+			// Lex sort: "beta" < "rc.1" < "rc.2", so rc.2 wins.
+			expect(latest.resolve("v", wiki)).toBe("3.0-rc.2");
+		});
+
+		it("returns a deterministic answer when duplicate versions appear under different leaves", function() {
+			// Two tiddlers under the same version, plus a lower one.
+			// listImmediateChildren reports "3.0" twice; the equal-versions
+			// path must not crash and must still surface the highest version.
+			var wiki = setupWiki([
+				{title: "v/3.0/x", text: ""},
+				{title: "v/3.0/y", text: ""},
+				{title: "v/2.0/x", text: ""}
+			]);
+			expect(latest.resolve("v", wiki)).toBe("3.0");
+		});
+
 	});
 
 	describe("expandPseudoSegments", function() {

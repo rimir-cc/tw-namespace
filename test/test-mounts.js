@@ -79,4 +79,32 @@ describe("namespace: mounts", function() {
 		expect(mounts.resolveMount("ok", wiki)).toBe("ok-dest");
 	});
 
+	it("skips a mount whose 'from' collapses to empty after slash normalisation", function() {
+		// `from: "/"` becomes "" after stripping leading+trailing slashes;
+		// such a mount is meaningless ("rewrite everything to <to>") and must
+		// be discarded rather than silently rerouting the entire ref space.
+		var wiki = setupWiki([
+			{title: "$:/m-bad", tags: "$:/tags/NamespaceMount", from: "/", to: "everywhere"},
+			{title: "$:/m-ok",  tags: "$:/tags/NamespaceMount", from: "real", to: "thing"}
+		]);
+		expect(mounts.resolveMount("anything", wiki)).toBeNull();
+		expect(mounts.resolveMount("real/sub", wiki)).toBe("thing/sub");
+	});
+
+	it("invalidateMounts(wiki) drops only that wiki's cache", function() {
+		var wikiA = setupWiki([
+			{title: "$:/m", tags: "$:/tags/NamespaceMount", from: "x", to: "alpha"}
+		]);
+		var wikiB = setupWiki([
+			{title: "$:/m", tags: "$:/tags/NamespaceMount", from: "x", to: "beta"}
+		]);
+		expect(mounts.resolveMount("x", wikiA)).toBe("alpha");
+		expect(mounts.resolveMount("x", wikiB)).toBe("beta");
+		// Change wikiA, invalidate just wikiA, wikiB stays cached.
+		wikiA.addTiddler({title: "$:/m", tags: "$:/tags/NamespaceMount", from: "x", to: "alpha-v2"});
+		mounts.invalidateMounts(wikiA);
+		expect(mounts.resolveMount("x", wikiA)).toBe("alpha-v2");
+		expect(mounts.resolveMount("x", wikiB)).toBe("beta");
+	});
+
 });

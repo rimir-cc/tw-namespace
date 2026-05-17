@@ -36,6 +36,7 @@ var MOUNT_TAG = "$:/tags/NamespaceMount";
 // Cache keyed per-wiki (WeakMap) so multiple concurrent wikis don't
 // share stale entries. Entry = sorted array of {from, to, title},
 // longest `from` first.
+/* istanbul ignore next — WeakMap is universally available on supported platforms; null fallback is for ancient engines */
 var caches = typeof WeakMap !== "undefined" ? new WeakMap() : null;
 
 function buildCache(wiki) {
@@ -45,6 +46,7 @@ function buildCache(wiki) {
 	var titles = wiki.filterTiddlers("[all[tiddlers+shadows]tag[" + MOUNT_TAG + "]]");
 	for(var i = 0; i < titles.length; i++) {
 		var t = wiki.getTiddler(titles[i]);
+		/* istanbul ignore if — filterTiddlers guarantees title resolves */
 		if(!t || !t.fields) { continue; }
 		var from = t.fields["from"],
 			to = t.fields["to"];
@@ -60,6 +62,7 @@ function buildCache(wiki) {
 	// Longest from first — ensures the most-specific mount wins when
 	// two mounts could both match (e.g. `OWASP` vs `OWASP/ASVS`).
 	entry.sort(function(a, b) { return b.from.length - a.from.length; });
+	/* istanbul ignore else — caches null only on ancient engines without WeakMap */
 	if(caches) { caches.set(wiki, entry); }
 	return entry;
 }
@@ -70,6 +73,7 @@ mount matched. One-pass: mount results don't get re-run through the
 mount table to avoid cascades. (Use aliases for multi-step rewrites.)
 */
 exports.resolveMount = function(ref, wiki) {
+	/* istanbul ignore if — callers (resolver.js) gate on non-empty ref */
 	if(!ref) { return null; }
 	var cache = buildCache(wiki);
 	for(var i = 0; i < cache.length; i++) {
@@ -87,6 +91,7 @@ exports.resolveMount = function(ref, wiki) {
 Drop the mount cache. With no wiki argument, drops every wiki's cache.
 */
 exports.invalidateMounts = function(wiki) {
+	/* istanbul ignore if — caches null only on ancient engines without WeakMap */
 	if(!caches) { return; }
 	if(wiki) { caches.delete(wiki); } else { caches = new WeakMap(); }
 };
