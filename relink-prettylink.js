@@ -68,18 +68,64 @@ function getContextForSource(sourceTitle, wiki) {
 /*
 Wrap a wiki so that fromTitle "no longer exists" and toTitle "now exists".
 Used to evaluate the resolver against the post-rename state.
+
+Goes beyond the bare existence check by also overriding `getTiddler`,
+`each`, and `eachShadow` to surface the renamed tiddler under its new
+title. This is needed for modules that scan the wiki to build derived
+state from tiddler fields — notably `field-aliases.js`, whose per-wiki
+cache is built from `each` + `eachShadow` and would otherwise still
+attribute the alias tokens to the old title.
+
+The synthesised tiddler carries `fromTiddler`'s fields with `title`
+overridden to `toTitle`, so a downstream scan reads identical field
+values to what relink will persist after the rename.
 */
 function wrapWikiForRename(wiki, fromTitle, toTitle) {
+	var fromTiddler = wiki.getTiddler(fromTitle);
 	var sim = Object.create(wiki);
+	function renamed() {
+		if(!fromTiddler) { return undefined; }
+		// Synthesise a tiddler under the new title carrying the same fields.
+		// Cheap to build once per wrap; we'll reuse the reference.
+		return new $tw.Tiddler(fromTiddler.fields, {title: toTitle});
+	}
+	var renamedTiddler = renamed();
 	sim.tiddlerExists = function(title) {
 		if(title === fromTitle) { return false; }
 		if(title === toTitle) { return true; }
 		return wiki.tiddlerExists(title);
 	};
+	sim.getTiddler = function(title) {
+		if(title === fromTitle) { return undefined; }
+		if(title === toTitle && renamedTiddler) { return renamedTiddler; }
+		return wiki.getTiddler(title);
+	};
+	if(typeof wiki.each === "function") {
+		sim.each = function(callback) {
+			var sawTo = false;
+			wiki.each(function(t, title) {
+				if(title === fromTitle) { return; }
+				if(title === toTitle) { sawTo = true; }
+				callback(t, title);
+			});
+			// Inject the renamed tiddler under its new title — but only if
+			// the wiki doesn't already have a tiddler at that title (relink
+			// will reject the rename in that case anyway, but defensive).
+			if(!sawTo && renamedTiddler) { callback(renamedTiddler, toTitle); }
+		};
+	}
 	if(typeof wiki.isShadowTiddler === "function") {
 		sim.isShadowTiddler = function(title) {
 			if(title === fromTitle) { return false; }
 			return wiki.isShadowTiddler(title);
+		};
+	}
+	if(typeof wiki.eachShadow === "function") {
+		sim.eachShadow = function(callback) {
+			wiki.eachShadow(function(t, title) {
+				if(title === fromTitle) { return; }
+				callback(t, title);
+			});
 		};
 	}
 	return sim;

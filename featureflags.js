@@ -15,6 +15,8 @@ settings tab.
   $:/config/rimir/namespace/aliases            — exact + pattern alias rewrite
   $:/config/rimir/namespace/self-prefix        — descendant resolution
                                                  (try "<source>/<ref>")
+  $:/config/rimir/namespace/field-aliases      — target-attached aliases
+                                                 (alias field on target tiddlers)
 
 Reading tiddler text on every resolve() call would be expensive, so we
 cache the four booleans and invalidate on wiki change events (startup.js
@@ -25,7 +27,7 @@ calls invalidate() when it detects a config tiddler in the change set).
 "use strict";
 
 var CONFIG_PREFIX = "$:/config/rimir/namespace/";
-var FLAGS = ["walk-up", "implicit-context", "pseudo-expansion", "aliases", "self-prefix"];
+var FLAGS = ["walk-up", "implicit-context", "pseudo-expansion", "aliases", "self-prefix", "field-aliases"];
 
 // null = not yet read. Object maps flag name → boolean.
 var cached = null;

@@ -1,0 +1,8 @@
+title: $:/plugins/rimir/namespace/examples/data/aliases/widget-a
+aliases: Conflicting
+
+One of two demo tiddlers that intentionally collide on the same alias
+token. `Conflicting` is declared here AND on `widget-b`, so the resolver
+returns `ambiguous` status; the link renders unresolved with a tooltip
+naming both candidates. The field-aliases example tab demonstrates the
+behaviour.

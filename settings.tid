@@ -41,6 +41,8 @@ Each feature is off by default. Toggle to enable.
 
 <$checkbox tiddler="$:/config/rimir/namespace/self-prefix" field="text" checked="yes" unchecked="no" default="no"> ''Self-prefix'' — resolve descendant refs by prepending the source title (`<source>/<ref>`)</$checkbox>
 
+<$checkbox tiddler="$:/config/rimir/namespace/field-aliases" field="text" checked="yes" unchecked="no" default="no"> ''Field aliases'' — resolve refs against target-attached alias tokens declared in the configured field on each target tiddler</$checkbox>
+
 ---
 
 Diagnostic view of what the resolver currently sees. Click through to the
@@ -84,6 +86,47 @@ Tiddlers tagged `$:/tags/NamespacePatternAlias` with `pattern` + `replacement`.
 <$list filter="[all[tiddlers+shadows]tag[$:/tags/NamespacePatternAlias]]" emptyMessage="<em>none defined</em>">
 * <code><$view field="pattern"/></code> → <code><$view field="replacement"/></code> &nbsp;<span style="opacity:0.7;">(<$link to=<<currentTiddler>>>source</$link>)</span>
 </$list>
+</$reveal>
+
+!! Field aliases
+
+<$reveal type="match" state="$:/config/rimir/namespace/field-aliases" text="no" default="no">
+//Feature disabled — enable in Feature flags above.//
+</$reveal>
+<$reveal type="nomatch" state="$:/config/rimir/namespace/field-aliases" text="no" default="no">
+Target-attached aliases — a tiddler T whose configured field lists
+`Foo [[Foo Bar]] Old` will be the target of `[[Foo]]`, `[[Foo Bar]]`, and
+`[[Old]]` references from anywhere. The field defaults to `aliases`;
+override below.
+
+''Alias field name:'' <$edit-text tiddler="$:/config/rimir/namespace/alias-field" default="aliases" tag="input" size="20"/>
+
+''Tiddlers declaring aliases:''
+
+<$list filter="[all[tiddlers+shadows]has{$:/config/rimir/namespace/alias-field}!is[system]] +[sort[]]" emptyMessage="<em>none defined</em>">
+* <$link to=<<currentTiddler>>/> — <code><$view field={{$:/config/rimir/namespace/alias-field}}/></code>
+</$list>
+
+''Ambiguity report:''
+
+<$list filter="[ns-field-alias-ambiguities[]]" variable="amb" emptyMessage="<em>no collisions — all alias tokens are unique</em>">
+* <code><<amb>></code> — defined on:
+<$list filter="[<amb>ns-field-alias-candidates[]]">
+** <$link to=<<currentTiddler>>/>
+</$list>
+</$list>
+
+To resolve a collision: remove the colliding token from the
+`{{$:/config/rimir/namespace/alias-field}}` field on all but one of the
+listed tiddlers. The remaining tiddler becomes the unique target for
+that token.
+
+In ''Restricted'' scope mode the resolver applies //locality narrowing//:
+when a token is ambiguous globally but only ONE candidate lives in the
+source's subtree, the link still works (it navigates to the local pick)
+and the wider collision surfaces through the link's hover tooltip and a
+`·` marker. So the report above is the //global// view; from any given
+source the practical behaviour may be a working link with a hint.
 </$reveal>
 
 !! Mount points

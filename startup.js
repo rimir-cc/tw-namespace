@@ -21,12 +21,13 @@ Walking ancestors costs O(depth) per change; negligible.
 
 "use strict";
 
-var resolver = require("$:/plugins/rimir/namespace/resolver.js");
-var aliases  = require("$:/plugins/rimir/namespace/aliases.js");
-var mounts   = require("$:/plugins/rimir/namespace/mounts.js");
-var indexer  = require("$:/plugins/rimir/namespace/indexer.js");
-var flags    = require("$:/plugins/rimir/namespace/featureflags.js");
-var scope    = require("$:/plugins/rimir/namespace/scope.js");
+var resolver     = require("$:/plugins/rimir/namespace/resolver.js");
+var aliases      = require("$:/plugins/rimir/namespace/aliases.js");
+var fieldAliases = require("$:/plugins/rimir/namespace/field-aliases.js");
+var mounts       = require("$:/plugins/rimir/namespace/mounts.js");
+var indexer      = require("$:/plugins/rimir/namespace/indexer.js");
+var flags        = require("$:/plugins/rimir/namespace/featureflags.js");
+var scope        = require("$:/plugins/rimir/namespace/scope.js");
 
 exports.name = "rimir-namespace-cache-invalidation";
 exports.platforms = ["browser", "node"];
@@ -50,6 +51,30 @@ exports.startup = function() {
 		// Alias cache: only invalidate when aliases are enabled.
 		if(flags.isEnabled("aliases", $tw.wiki)) {
 			aliases.invalidateAliases();
+		}
+		// Field-alias cache: invalidate when enabled (any tiddler change
+		// could add/remove an alias token), or when the alias-field config
+		// tiddler changes (the underlying field name may have flipped).
+		// Track config change so we trigger a full backlinks rebuild
+		// downstream — like other config flips, every resolution may now
+		// differ.
+		var fieldAliasesEnabled = flags.isEnabled("field-aliases", $tw.wiki);
+		if(fieldAliases.isConfigChange(changes)) {
+			configChanged = true;
+		}
+		if(fieldAliasesEnabled || fieldAliases.isConfigChange(changes)) {
+			// Probe BEFORE invalidating so the pre-change cache is still
+			// available for the "previously had" check. Without this, a
+			// target tiddler losing its aliases field would invalidate the
+			// cache but the per-source reindex below would skip the now-
+			// stale backlinks (the sources themselves didn't change).
+			var changedTitlesForFA = [];
+			for(var faChangedTitle in changes) { changedTitlesForFA.push(faChangedTitle); }
+			if(fieldAliasesEnabled &&
+				fieldAliases.containsAffectedTiddler(changedTitlesForFA, $tw.wiki)) {
+				configChanged = true;
+			}
+			fieldAliases.invalidate();
 		}
 		// Mount cache: always (mounts are always-on).
 		mounts.invalidateMounts();

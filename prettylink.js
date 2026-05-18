@@ -83,8 +83,12 @@ exports.parse = function() {
 		children: [{
 			type: "link",
 			attributes: {
-				to:      {type: "filtered", filter: "[<__nsref__>ns-resolve<__nssrc__>]"},
-				"class": {type: "filtered", filter: "[<__nsref__>ns-resolve-class<__nssrc__>]"}
+				to:        {type: "filtered", filter: "[<__nsref__>ns-resolve<__nssrc__>]"},
+				"class":   {type: "filtered", filter: "[<__nsref__>ns-resolve-class<__nssrc__>]"},
+				// `tooltip` is core $link's hover-text attribute (renders as
+				// the anchor's HTML `title=`). Empty for unambiguous refs so
+				// $link falls back to its own default (the target title).
+				"tooltip": {type: "filtered", filter: "[<__nsref__>ns-resolve-diag<__nssrc__>]"}
 			},
 			children: [{type: "text", text: text, start: start, end: textEndPos}]
 		}]

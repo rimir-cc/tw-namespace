@@ -29,6 +29,13 @@ off by default and activated via feature flags in settings.
 # ''Literal on raw REF'' — a real tiddler always beats an alias or
   pseudo expansion. Avoids silent redirection if a tiddler and an alias
   share a name.
+# ☐ ''Field-alias lookup'' — does any tiddler declare REF as a token in
+  its configured alias field (default `aliases`)? Single match → resolved.
+  Multiple matches → //ambiguous// (link rendered unresolved with a
+  hover-tooltip listing the colliding tiddlers and how to fix). In
+  ''Restricted'' scope mode an extra //locality narrowing// step picks a
+  single in-subtree candidate when possible — link works, tooltip still
+  surfaces the wider collision.
 # ☐ ''Alias rewrite'' — exact aliases (tiddlers tagged
   `$:/tags/NamespaceAlias` with `short` + `expands-to` fields) and
   pattern aliases (`$:/tags/NamespacePatternAlias`, `pattern` +
@@ -90,6 +97,7 @@ immediately.
 |Implicit context |`context:` field fallback (in addition to `\context` pragma / `<$context>` widget) |
 |Pseudo expansion |`_latest` and other `_foo` pseudo-segment modules |
 |Aliases |Exact + pattern alias resolution |
+|Field aliases |Target-attached alias tokens declared in a field on each target |
 
 !! Declaring a context
 
@@ -149,6 +157,61 @@ Now `OWASP_V3.3`, `OWASP_V4.2`, `OWASP_V5.0`, … all resolve.
 
 Exact beats pattern. See the [[examples tab|$:/plugins/rimir/namespace/examples/aliases]]
 for live demos.
+
+!! Field aliases — alternative names on the target itself
+
+Target-attached aliases live as a field on the tiddler they point to.
+Tag-free; no extra index tiddlers. Configure the field name via
+`$:/config/rimir/namespace/alias-field` (default `aliases`):
+
+```
+title: project/widget
+aliases: Widget [[Foo Bar]] OldName
+```
+
+Now `[[Widget]]`, `[[Foo Bar]]`, and `[[OldName]]` from anywhere all
+resolve to `project/widget`. The field is parsed as a TW title list, so
+multi-word tokens use `[[...]]` wrapping.
+
+If two tiddlers declare the same token, the link renders as ambiguous —
+unresolved with a `?` marker and a hover tooltip naming the colliding
+tiddlers and the field to edit. The resolver refuses to pick a winner;
+the user is expected to remove the token from all but one target.
+
+!!! Locality narrowing (Restricted scope mode)
+
+When the [[Scope|$:/plugins/rimir/namespace/settings]] is set to
+//Restricted// (with whitelisted subtree prefixes), the resolver applies
+an extra step before flagging ambiguity: among the candidates, prefer
+the one that lives in the same subtree as the source.
+
+Example: prefixes `knowledge/llm` and `knowledge/orga`. A collision on
+`Widget` declared on both `knowledge/llm/Widget` and
+`knowledge/orga/Widget` produces, from a source under `knowledge/llm`:
+
+* link navigates to `knowledge/llm/Widget` (the local pick)
+* a `·` marker on the link signals "this is one of several",
+* hover tooltip names the other candidates and tells the user how to
+  clean them up.
+
+Behaviour matrix:
+
+|!Candidates total |!In source's subtree |!Outcome |
+|1 |— |resolved (no marker) |
+|≥2 |exactly 1 |resolved to the local one, `·` marker + tooltip |
+|≥2 |≥2 |unresolved + diagnostic narrowed to the local conflict (with the wider collision listed as context) |
+|≥2 |0 |unresolved + diagnostic listing the full collision |
+
+In //Global// scope mode there are no declared subtrees, so narrowing
+doesn't apply and any collision is flagged as ambiguous. Move to
+//Restricted// when you want the resolver to lean on your scope
+prefixes for disambiguation.
+
+A real tiddler whose title equals an alias token always beats the alias
+(stage-1 literal still wins). Within the alias machinery, field-aliases
+are checked before `NamespaceAlias` rewrites — the target-attached
+declaration is closer to the reality of "this tiddler answers to this
+name" than a separate rewrite-tiddler.
 
 !! Mount points — short prefixes for deep subtrees
 

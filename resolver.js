@@ -230,10 +230,11 @@ exports.expandPseudoSegments = function(ref, wiki) {
 
 /* ---------- main resolver ---------- */
 
-var aliases = require("$:/plugins/rimir/namespace/aliases.js");
-var mounts  = require("$:/plugins/rimir/namespace/mounts.js");
-var flags   = require("$:/plugins/rimir/namespace/featureflags.js");
-var scope   = require("$:/plugins/rimir/namespace/scope.js");
+var aliases      = require("$:/plugins/rimir/namespace/aliases.js");
+var fieldAliases = require("$:/plugins/rimir/namespace/field-aliases.js");
+var mounts       = require("$:/plugins/rimir/namespace/mounts.js");
+var flags        = require("$:/plugins/rimir/namespace/featureflags.js");
+var scope        = require("$:/plugins/rimir/namespace/scope.js");
 
 var ALIAS_MAX_HOPS = 3;
 
@@ -248,11 +249,25 @@ options:     optional; {context: "<prefix>"} to supply a declared context
              that shadows walk-up. Pseudo-segments in the context prefix
              are expanded before use.
 
-Returns: {status, resolved, tried}
-  status:   "literal" | "alias" | "mount" | "absolute" | "context" |
-            "self" | "walkup" | "unresolved" | "out-of-scope"
-  resolved: resolved title or null
-  tried:    ordered array of every title we checked (useful for tooltips)
+Returns: {status, resolved, tried[, ambiguity]}
+  status:    "literal" | "alias" | "field-alias" | "mount" | "absolute" |
+             "context" | "self" | "walkup" | "ambiguous" | "unresolved" |
+             "out-of-scope"
+  resolved:  resolved title or null
+  tried:     ordered array of every title we checked (useful for tooltips)
+  ambiguity: present in two cases:
+              (a) status === "ambiguous" — couldn't pick a target.
+                  {token, candidates, field[, subtree, allCandidates]}
+                  When `subtree` is set and `allCandidates` is also set,
+                  the surfaced `candidates` were narrowed to in-subtree
+                  collisions; `allCandidates` carries the full list for
+                  diagnostic context.
+              (b) status === "field-alias" with multi-target token —
+                  locality narrowing picked a single in-subtree target.
+                  {token, candidates, field, narrowedTo, subtree}
+                  Caller can surface the wider collision via tooltip + a
+                  "narrowed" CSS variant while the link still navigates
+                  to the local pick.
 
 Scope gate: if the configured scope mode is "prefixes" and the source
 tiddler's title doesn't start (at a segment boundary) with one of the
@@ -276,6 +291,80 @@ exports.resolve = function(ref, sourceTitle, wiki, options) {
 	tried.push(ref);
 	if(exists(wiki, ref)) {
 		return {status: "literal", resolved: ref, tried: tried};
+	}
+	// 1b. Field-alias lookup — does any tiddler declare REF as an alias
+	//     in its configured alias field? Single match → resolved.
+	//     Multiple matches → check for locality narrowing (Restricted scope
+	//     mode only): if exactly one candidate lives in the source's
+	//     declared subtree, prefer it and resolve to it — but keep the
+	//     ambiguity metadata so the link can still surface the wider
+	//     collision via tooltip. The user navigates to the obvious local
+	//     match while being nudged to clean up the broader namespace.
+	//     If 0 or ≥2 candidates fall in the subtree, stay ambiguous
+	//     (narrow the candidate list to the in-subtree set when ≥2,
+	//     keep the full list when 0).
+	//     Gated by the "field-aliases" feature flag. System-namespace refs
+	//     bypass this — `$:/...` is always interpreted absolutely.
+	if(flags.isEnabled("field-aliases", wiki) && ref.indexOf("$:/") !== 0) {
+		var faHit = fieldAliases.resolveFieldAlias(ref, wiki);
+		if(faHit) {
+			if(faHit.ambiguous) {
+				// Try locality narrowing — only meaningful in Restricted
+				// scope mode where the user has declared subtree prefixes.
+				var subtree = scope.getMatchingPrefix(sourceTitle, wiki);
+				var localCandidates = [];
+				if(subtree) {
+					for(var ci = 0; ci < faHit.candidates.length; ci++) {
+						var cand = faHit.candidates[ci];
+						if(cand === subtree || cand.indexOf(subtree + "/") === 0) {
+							localCandidates.push(cand);
+						}
+					}
+				}
+				if(localCandidates.length === 1 && exists(wiki, localCandidates[0])) {
+					// Single local pick. Resolve to it but carry the full
+					// ambiguity record so callers can show "also defined on
+					// X, Y" in the tooltip and surface a "narrowed" CSS hint.
+					tried.push(localCandidates[0]);
+					return {
+						status: "field-alias",
+						resolved: localCandidates[0],
+						tried: tried,
+						ambiguity: {
+							token: ref,
+							candidates: faHit.candidates,
+							field: fieldAliases.getFieldName(wiki),
+							narrowedTo: localCandidates[0],
+							subtree: subtree
+						}
+					};
+				}
+				// 0 or ≥2 in subtree — stay ambiguous. When ≥2 in subtree
+				// narrow the surfaced candidate list so the user sees the
+				// LOCAL conflict (the broader one is at least irrelevant
+				// for navigation from here).
+				var surfaced = (localCandidates.length >= 2) ? localCandidates : faHit.candidates;
+				return {
+					status: "ambiguous",
+					resolved: null,
+					tried: tried,
+					ambiguity: {
+						token: ref,
+						candidates: surfaced,
+						field: fieldAliases.getFieldName(wiki),
+						subtree: subtree || undefined,
+						allCandidates: (surfaced !== faHit.candidates) ? faHit.candidates : undefined
+					}
+				};
+			}
+			if(exists(wiki, faHit.title)) {
+				tried.push(faHit.title);
+				return {status: "field-alias", resolved: faHit.title, tried: tried};
+			}
+			// Stale cache or a token pointing at a non-existent tiddler —
+			// fall through to remaining stages rather than returning a
+			// missing target. Cache invalidation (startup.js) keeps this rare.
+		}
 	}
 	// 2. Alias rewrite — chain up to ALIAS_MAX_HOPS hops for cycle safety.
 	//    Gated by the "aliases" feature flag.

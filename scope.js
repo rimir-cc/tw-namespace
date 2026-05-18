@@ -91,6 +91,33 @@ exports.isInScope = function(sourceTitle, wiki) {
 	return false;
 };
 
+/*
+Return the longest whitelisted prefix that `sourceTitle` falls under (at a
+segment boundary). Returns null in Global mode (no declared subtrees) or
+when the source matches none of the whitelisted prefixes.
+
+Used by the field-aliases resolver stage for locality narrowing — when an
+alias token has multiple targets, prefer the candidate that lives in the
+same subtree as the source. Restricted mode only.
+
+Longest-first matching: a source under `a/b/c` matches `a/b` rather than
+`a`, so deeply-nested whitelist entries take precedence (mirrors mount
+resolution semantics).
+*/
+exports.getMatchingPrefix = function(sourceTitle, wiki) {
+	if(!sourceTitle) { return null; }
+	var s = read(wiki);
+	if(s.mode !== "prefixes") { return null; }
+	var match = null;
+	for(var i = 0; i < s.prefixes.length; i++) {
+		var p = s.prefixes[i];
+		if(sourceTitle === p || sourceTitle.indexOf(p + "/") === 0) {
+			if(!match || p.length > match.length) { match = p; }
+		}
+	}
+	return match;
+};
+
 exports.invalidate = function() {
 	cached = null;
 };

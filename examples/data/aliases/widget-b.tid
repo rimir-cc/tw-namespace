@@ -1,0 +1,6 @@
+title: $:/plugins/rimir/namespace/examples/data/aliases/widget-b
+aliases: Conflicting
+
+Sibling of `widget-a`. Same alias token (`Conflicting`) declared on both,
+exercising the resolver's ambiguity surface. Either remove the token
+from one of the two to disambiguate.

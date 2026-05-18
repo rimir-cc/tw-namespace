@@ -16,3 +16,26 @@ tags: $:/tags/Stylesheet
 .ns-resolved {
 	/* Inherits tc-tiddlylink styling; nothing to override in stage 1. */
 }
+
+/* Ambiguous: link target couldn't be chosen because multiple tiddlers
+   declared the same alias token. The link is rendered as unresolved
+   (above selectors apply via the combined ns-unresolved + ns-ambiguous
+   class list) plus a "?" marker to distinguish from a regular missing
+   target. Hover for the diagnostic message. */
+.ns-ambiguous::after {
+	content: " ?";
+	font-size: 0.8em;
+	color: var(--rr-warn, #d80);
+}
+
+/* Narrowed: link IS resolved (locality narrowing picked a local target
+   from a wider collision), but a small marker hints that the underlying
+   alias token is non-unique. Hover for the list of other tiddlers
+   declaring it. Coloured like the warning marker, not danger, since the
+   link still works. */
+.ns-narrowed::after {
+	content: " \00B7";
+	font-size: 0.9em;
+	color: var(--rr-warn, #d80);
+	opacity: 0.7;
+}

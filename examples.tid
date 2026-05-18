@@ -21,6 +21,9 @@ Each page focuses on one feature. Click through:
   declarative, tiddler-level.
 # [[Aliases|$:/plugins/rimir/namespace/examples/aliases]] — short tokens
   rewritten to longer paths, exact and pattern.
+# [[Field aliases|$:/plugins/rimir/namespace/examples/field-aliases]] —
+  alternative names declared as a field on the target itself, with
+  ambiguity surfacing.
 # [[Mount points|$:/plugins/rimir/namespace/examples/mounts]] — logical
   prefix → physical prefix, for cleaner top-level names.
 # [[Backlinks & pin-latest|$:/plugins/rimir/namespace/examples/backlinks]] —

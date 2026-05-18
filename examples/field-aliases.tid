@@ -1,0 +1,68 @@
+title: $:/plugins/rimir/namespace/examples/field-aliases
+caption: field aliases
+
+! Field aliases — alternative names on the target
+
+Target-attached aliases live as a field on the target tiddler. No
+separate index tiddler, no rewrite indirection — just a list of tokens
+in a configurable field.
+
+The field name defaults to `aliases` and can be changed via
+[[$:/config/rimir/namespace/alias-field]]. The field value is parsed as
+a TW title list so multi-word tokens use the `[[...]]` form.
+
+!! Try it
+
+This example uses the demo data tiddler
+[[$:/plugins/rimir/namespace/examples/data/aliases/widget]]:
+
+```
+title:   data/aliases/widget
+aliases: Widget [[The Widget]] OldName
+```
+
+With the ''Field aliases'' feature enabled, the following all resolve to
+the same target:
+
+* {{{ [[Widget]] }}} → <$let __nsref__="Widget" __nssrc__="$:/plugins/rimir/namespace/examples/field-aliases"><$link to={{{ [<__nsref__>ns-resolve<__nssrc__>] }}} class={{{ [<__nsref__>ns-resolve-class<__nssrc__>] }}}>Widget</$link></$let>
+* {{{ [[The Widget]] }}} → <$let __nsref__="The Widget" __nssrc__="$:/plugins/rimir/namespace/examples/field-aliases"><$link to={{{ [<__nsref__>ns-resolve<__nssrc__>] }}} class={{{ [<__nsref__>ns-resolve-class<__nssrc__>] }}}>The Widget</$link></$let>
+* {{{ [[OldName]] }}} → <$let __nsref__="OldName" __nssrc__="$:/plugins/rimir/namespace/examples/field-aliases"><$link to={{{ [<__nsref__>ns-resolve<__nssrc__>] }}} class={{{ [<__nsref__>ns-resolve-class<__nssrc__>] }}}>OldName</$link></$let>
+
+!! Ambiguity
+
+If two tiddlers declare the same token, the resolver refuses to pick a
+winner. The link renders as unresolved with a `?` marker; hover for the
+diagnostic listing the colliding tiddlers and the field to edit:
+
+* {{{ [[Conflicting]] }}} → <$let __nsref__="Conflicting" __nssrc__="$:/plugins/rimir/namespace/examples/field-aliases"><$link to={{{ [<__nsref__>ns-resolve<__nssrc__>] }}} class={{{ [<__nsref__>ns-resolve-class<__nssrc__>] }}} tooltip={{{ [<__nsref__>ns-resolve-diag<__nssrc__>] }}}>Conflicting</$link></$let>
+
+The two demo tiddlers that collide:
+
+* [[$:/plugins/rimir/namespace/examples/data/aliases/widget-a]] — `aliases: Conflicting`
+* [[$:/plugins/rimir/namespace/examples/data/aliases/widget-b]] — `aliases: Conflicting`
+
+!! Locality narrowing (Restricted scope mode)
+
+When //Scope// is set to //Restricted// in the settings tab with a
+whitelisted prefix that contains one of the colliding tiddlers, the
+resolver prefers the in-subtree pick. The link still works; the
+tooltip surfaces the wider collision so users notice and clean up.
+
+Try it: in [[settings|$:/plugins/rimir/namespace/settings]], switch
+//Scope// to //Restricted// and add a prefix matching where you keep
+your colliding tiddlers. Then re-render this tab — the `Conflicting`
+link above will resolve cleanly (with a `·` marker and tooltip)
+instead of going to the ambiguous state.
+
+In //Global// scope mode (the default) no narrowing happens; any
+collision is flagged as ambiguous.
+
+!! Precedence
+
+* ''Real tiddler beats alias'' — a tiddler with title `Widget` (if it
+  existed) would still win over the field-alias.
+* ''Field-alias beats NamespaceAlias rewrite-tiddler'' — target-attached
+  declarations are closer to the truth than a separate rewrite.
+* ''Walk-up does not participate'' — field-alias lookup is global, not
+  contextual. The same `[[Widget]]` resolves the same way from
+  every source (modulo Restricted-mode locality narrowing).
